@@ -17,7 +17,7 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        this.ws = new WebSocket('ws://localhost:8080');
+        this.ws = new WebSocket('ws://localhost:3000');
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
