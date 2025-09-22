@@ -17,7 +17,14 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        this.ws = new WebSocket('ws://localhost:3000');
+        // Автоматическое определение хоста для работы на Render
+        const host = window.location.hostname;
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const port = window.location.port ? ':' + window.location.port : '';
+        const wsUrl = `${protocol}//${host}${port}`;
+        
+        console.log('🔗 Connecting to WebSocket:', wsUrl);
+        this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
