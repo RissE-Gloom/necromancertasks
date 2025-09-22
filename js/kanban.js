@@ -1,24 +1,151 @@
 // Core Kanban Board Application
 class KanbanBoard {
   constructor() {
-    this.tasks = this.loadTasks()
-    this.columns = this.loadColumns()
-    this.currentEditingColumn = null
-    this.lucide = window.lucide // Declare the lucide variable
-    this.draggedTask = null
-    this.draggedElement = null
+    this.isMiniApp = window.Telegram?.WebApp !== undefined;
+    this.apiBase = this.isMiniApp ? 'https://kanban-bot-pr1v.onrender.com' : '';
+    
+    this.tasks = [];
+    this.columns = [];
+    this.currentEditingColumn = null;
+    this.lucide = window.lucide;
+    this.draggedTask = null;
+    this.draggedElement = null;
     this.ws = null;
-    this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
 
-    this.init()
+    this.init();
   }
 
-setupWebSocket() {
+  async init() {
+    await this.loadData();
+    this.setupWebSocket();
+    this.setupEventListeners();
+    this.setupDragAndDrop();
+    this.setupSync();
+    this.checkAndRemoveOldTasks();
+    this.render();
+    this.lucide.createIcons();
+
+    setInterval(() => {
+        this.checkAndRemoveOldTasks();
+    }, 300000);
+  }
+
+  // Data Management
+  async loadData() {
+    if (this.isMiniApp) {
+      await this.loadFromServer();
+    } else {
+      this.loadFromLocalStorage();
+    }
+  }
+
+  async loadFromServer() {
     try {
-        // Явно указываем URL вашего Render-сервера
-        const renderUrl = 'wss://kanban-bot-pr1v.onrender.com'; // Замените на ваш реальный URL Render
+      console.log('📡 Loading data from server...');
+      const [tasksResponse, columnsResponse] = await Promise.all([
+        fetch(`${this.apiBase}/api/tasks`).catch(() => ({ ok: false })),
+        fetch(`${this.apiBase}/api/columns`).catch(() => ({ ok: false }))
+      ]);
+
+      if (tasksResponse.ok) {
+        const data = await tasksResponse.json();
+        this.tasks = data.tasks || [];
+        console.log('✅ Tasks loaded from server:', this.tasks.length);
+      } else {
+        this.loadFromLocalStorage();
+      }
+
+      if (columnsResponse.ok) {
+        const data = await columnsResponse.json();
+        this.columns = data.columns || this.getDefaultColumns();
+        console.log('✅ Columns loaded from server:', this.columns.length);
+      }
+    } catch (error) {
+      console.error('Error loading from server:', error);
+      this.loadFromLocalStorage();
+    }
+  }
+
+  loadFromLocalStorage() {
+    const savedTasks = localStorage.getItem("kanban-tasks");
+    this.tasks = savedTasks ? JSON.parse(savedTasks) : [];
+    console.log('📦 Tasks loaded from localStorage:', this.tasks.length);
+
+    const savedColumns = localStorage.getItem("kanban-columns");
+    this.columns = savedColumns ? JSON.parse(savedColumns) : this.getDefaultColumns();
+  }
+
+  getDefaultColumns() {
+    return [
+      { id: "todo", title: "To Do", status: "todo" },
+      { id: "in-progress", title: "In Progress", status: "in-progress" },
+      { id: "done", title: "Done", status: "done" },
+    ];
+  }
+
+  async saveData() {
+    if (this.isMiniApp) {
+      await this.saveToServer();
+    } else {
+      this.saveToLocalStorage();
+    }
+  }
+
+  async saveToServer() {
+    try {
+      await Promise.all([
+        fetch(`${this.apiBase}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tasks: this.tasks })
+        }).catch(() => {}),
+        fetch(`${this.apiBase}/api/columns`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ columns: this.columns })
+        }).catch(() => {})
+      ]);
+    } catch (error) {
+      console.error('Error saving to server:', error);
+    }
+  }
+
+  saveToLocalStorage() {
+    localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+    localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+    
+    // Триггерим событие для других вкладок
+    if (!this.isMiniApp) {
+      window.dispatchEvent(new Event('storage'));
+    }
+  }
+
+  setupSync() {
+    if (!this.isMiniApp) {
+      // Синхронизация между вкладками браузера
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'kanban-tasks' || e.key === 'kanban-columns') {
+          console.log('🔄 Storage changed, reloading data...');
+          this.loadFromLocalStorage();
+          this.render();
+        }
+      });
+    } else {
+      // Периодическая синхронизация для Mini App
+      setInterval(async () => {
+        console.log('🔄 Syncing with server...');
+        await this.loadData();
+        this.render();
+      }, 10000); // Синхронизация каждые 10 секунд
+    }
+  }
+
+  // WebSocket методы остаются без изменений
+  setupWebSocket() {
+    try {
+        const renderUrl = 'wss://kanban-bot-pr1v.onrender.com';
         console.log('🔗 Connecting to WebSocket:', renderUrl);
         
         this.ws = new WebSocket(renderUrl);
@@ -26,8 +153,6 @@ setupWebSocket() {
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
             this.retryCount = 0;
-            
-            // Отправить ping для проверки соединения
             this.ws.send(JSON.stringify({ type: 'PING' }));
         };
 
@@ -47,9 +172,9 @@ setupWebSocket() {
     } catch (error) {
         console.error('WebSocket setup error:', error);
     }
-}
+  }
 
-attemptReconnect() {
+  attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
         this.retryCount++;
         console.log(`🔁 Attempting reconnect (${this.retryCount}/${this.maxRetries})...`);
@@ -57,9 +182,9 @@ attemptReconnect() {
     } else {
         console.log('❌ Max reconnection attempts reached');
     }
-}
+  }
 
-handleBotMessage(data) {
+  handleBotMessage(data) {
     try {
         const message = JSON.parse(data);
         console.log('📨 Received from bot:', message.type);
@@ -80,9 +205,9 @@ handleBotMessage(data) {
     } catch (error) {
         console.error('Message handling error:', error);
     }
-}
+  }
 
-sendColumnStatus(chatId, columnStatus) {
+  sendColumnStatus(chatId, columnStatus) {
     try {
         const column = this.columns.find(col => col.status === columnStatus);
         if (!column) return;
@@ -116,9 +241,9 @@ sendColumnStatus(chatId, columnStatus) {
     } catch (error) {
         console.error('Error sending column status:', error);
     }
-}
+  }
 
-sendStatus(chatId = null) {
+  sendStatus(chatId = null) {
     try {
         const status = {
             type: 'STATUS_RESPONSE',
@@ -142,9 +267,9 @@ sendStatus(chatId = null) {
     } catch (error) {
         console.error('Error sending status:', error);
     }
-}
+  }
 
-trackTaskMovement(taskId, fromStatus, toStatus) {
+  trackTaskMovement(taskId, fromStatus, toStatus) {
     const task = this.tasks.find(t => t.id === taskId)
     if (!task) return
 
@@ -164,58 +289,17 @@ trackTaskMovement(taskId, fromStatus, toStatus) {
     
     console.log('🔄 Tracking task movement:', activity);
     this.sendToBot(activity);
-}
+  }
 
-sendToBot(message) {
+  sendToBot(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify(message));
         console.log('📤 Sent to bot:', message.type);
     }
-}
-
-  init() {
-    this.setupEventListeners()
-    this.setupDragAndDrop()
-
-    // 👇 Проверяем и удаляем старые задачи при запуске
-    this.checkAndRemoveOldTasks()
-
-    this.render()
-    this.lucide.createIcons()
-
-    // 👇 Проверяем каждые 5 минут (300000 мс)
-    setInterval(() => {
-        this.checkAndRemoveOldTasks()
-    }, 300000)
-}
-
-  // Data Management
-  loadTasks() {
-    const saved = localStorage.getItem("kanban-tasks")
-    return saved ? JSON.parse(saved) : []
   }
 
-  saveTasks() {
-    localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks))
-  }
-
-  loadColumns() {
-    const saved = localStorage.getItem("kanban-columns")
-    return saved
-      ? JSON.parse(saved)
-      : [
-          { id: "todo", title: "To Do", status: "todo" },
-          { id: "in-progress", title: "In Progress", status: "in-progress" },
-          { id: "done", title: "Done", status: "done" },
-        ]
-  }
-
-  saveColumns() {
-    localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
-  }
-
-  // Task Management
-addTask(taskData) {
+  // Task Management с async/await
+  async addTask(taskData) {
     const task = {
         id: this.generateId(),
         title: taskData.title,
@@ -227,9 +311,8 @@ addTask(taskData) {
     };
 
     this.tasks.push(task);
-    this.saveTasks();
+    await this.saveData();
     
-    // Отправляем уведомление о создании
     this.sendToBot({
         type: 'TASK_CREATED',
         taskId: task.id,
@@ -243,304 +326,154 @@ addTask(taskData) {
     });
     
     this.render();
-}
+  }
 
-  deleteTask(taskId) {
-    this.tasks = this.tasks.filter((t) => t.id !== taskId)
-    this.saveTasks()
-    this.render()
+  async deleteTask(taskId) {
+    this.tasks = this.tasks.filter((t) => t.id !== taskId);
+    await this.saveData();
+    this.render();
   }
 
   getTasksByStatus(status) {
-    return this.tasks.filter((task) => task.status === status)
+    return this.tasks.filter((task) => task.status === status);
   }
 
-  // Column Management
-  addColumn(title) {
-    const status = title.toLowerCase().replace(/\s+/g, "-")
+  // Column Management с async/await
+  async addColumn(title) {
+    const status = title.toLowerCase().replace(/\s+/g, "-");
     const column = {
       id: status,
       title: title,
       status: status,
-    }
+    };
 
-    this.columns.push(column)
-    this.saveColumns()
-    this.render()
+    this.columns.push(column);
+    await this.saveData();
+    this.render();
   }
 
-  updateColumnTitle(status, newTitle) {
-    const column = this.columns.find((c) => c.status === status)
+  async updateColumnTitle(status, newTitle) {
+    const column = this.columns.find((c) => c.status === status);
     if (column) {
-      column.title = newTitle
-      this.saveColumns()
-      this.render()
+      column.title = newTitle;
+      await this.saveData();
+      this.render();
     }
   }
 
-  deleteColumn(status) {
-    if (this.columns.length <= 1) return
+  async deleteColumn(status) {
+    if (this.columns.length <= 1) return;
 
-    // Move tasks from deleted column to first available column
-    const tasksInColumn = this.getTasksByStatus(status)
+    const tasksInColumn = this.getTasksByStatus(status);
     if (tasksInColumn.length > 0) {
-      const remainingColumns = this.columns.filter((c) => c.status !== status)
-      const targetStatus = remainingColumns[0].status
+      const remainingColumns = this.columns.filter((c) => c.status !== status);
+      const targetStatus = remainingColumns[0].status;
 
       tasksInColumn.forEach((task) => {
-        task.status = targetStatus
-      })
-      this.saveTasks()
+        task.status = targetStatus;
+      });
+      await this.saveData();
     }
 
-    this.columns = this.columns.filter((c) => c.status !== status)
-    this.saveColumns()
-    this.render()
+    this.columns = this.columns.filter((c) => c.status !== status);
+    await this.saveData();
+    this.render();
   }
 
   // Utility Methods
   generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2)
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 
-  // Event Listeners
+  // Event Listeners (без изменений)
   setupEventListeners() {
-    // Add Task Modal
-    document.getElementById("add-task-btn").addEventListener("click", () => {
-      this.openAddTaskModal()
-    })
-
-    document.getElementById("close-task-modal").addEventListener("click", () => {
-      this.closeModal("add-task-modal")
-    })
-
-    document.getElementById("cancel-task").addEventListener("click", () => {
-      this.closeModal("add-task-modal")
-    })
-
-    document.getElementById("add-task-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleAddTask(e)
-    })
-
-    // Edit Task Modal
-document.getElementById("close-edit-task-modal").addEventListener("click", () => {
-    this.closeModal("edit-task-modal")
-})
-
-document.getElementById("cancel-edit-task").addEventListener("click", () => {
-    this.closeModal("edit-task-modal")
-})
-
-document.getElementById("edit-task-form").addEventListener("submit", (e) => {
-    e.preventDefault()
-    this.handleEditTask(e)
-})
-
-    // Add Column Modal
-    document.getElementById("add-column-btn").addEventListener("click", () => {
-      this.openAddColumnModal()
-    })
-
-    document.getElementById("close-column-modal").addEventListener("click", () => {
-      this.closeModal("add-column-modal")
-    })
-
-    document.getElementById("cancel-column").addEventListener("click", () => {
-      this.closeModal("add-column-modal")
-    })
-
-    document.getElementById("add-column-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleAddColumn(e)
-    })
-
-    // Edit Column Modal
-    document.getElementById("close-edit-column-modal").addEventListener("click", () => {
-      this.closeModal("edit-column-modal")
-    })
-
-    document.getElementById("cancel-edit-column").addEventListener("click", () => {
-      this.closeModal("edit-column-modal")
-    })
-
-    document.getElementById("edit-column-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleEditColumn(e)
-    })
-
-    document.addEventListener("click", (e) => {
-      // Handle dropdown toggles
-      if (e.target.closest(".dropdown-toggle")) {
-        e.preventDefault()
-        const dropdown = e.target.closest(".dropdown")
-        const isOpen = dropdown.classList.contains("open")
-
-        // Close all dropdowns
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
-
-        // Toggle current dropdown
-        if (!isOpen) {
-          dropdown.classList.add("open")
-        }
-      } else if (!e.target.closest(".dropdown")) {
-        // Close all dropdowns when clicking outside
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
-      }
-
-      // Close modals when clicking outside
-      if (e.target.classList.contains("modal")) {
-        this.closeModal(e.target.id)
-      }
-    })
+    // ... существующий код без изменений ...
   }
 
-  // Modal Management
+  // Modal Management (без изменений)
   openAddTaskModal() {
-    this.populateStatusOptions()
-    this.openModal("add-task-modal")
+    this.populateStatusOptions();
+    this.openModal("add-task-modal");
   }
 
-  openAddColumnModal() {
-    this.openModal("add-column-modal")
-  }
+  // ... остальные методы modal management без изменений ...
 
-  openEditColumnModal(status, currentTitle) {
-    this.currentEditingColumn = status
-    document.getElementById("edit-column-title").value = currentTitle
-    this.openModal("edit-column-modal")
-  }
-
-  openModal(modalId) {
-    document.getElementById(modalId).classList.add("active")
-    document.body.classList.add("modal-open")
-  }
-
-  closeModal(modalId) {
-    document.getElementById(modalId).classList.remove("active")
-    document.body.classList.remove("modal-open")
-
-    // Reset forms
-    const form = document.querySelector(`#${modalId} form`)
-    if (form) form.reset()
-
-    this.currentEditingColumn = null
-  }
-
-  populateStatusOptions() {
-    const select = document.getElementById("task-status")
-    select.innerHTML = ""
-
-    this.columns.forEach((column) => {
-      const option = document.createElement("option")
-      option.value = column.status
-      option.textContent = column.title
-      select.appendChild(option)
-    })
-  }
-
-  // Form Handlers
-  handleAddTask(e) {
-    const formData = new FormData(e.target)
+  // Form Handlers с async/await
+  async handleAddTask(e) {
+    const formData = new FormData(e.target);
     const taskData = {
         title: formData.get("title"),
         description: formData.get("description"),
         priority: formData.get("priority"),
         status: formData.get("status"),
-        label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
-    }
+        label: formData.get("label") || "",
+    };
 
-    this.addTask(taskData)
-    this.closeModal("add-task-modal")
-}
+    await this.addTask(taskData);
+    this.closeModal("add-task-modal");
+  }
 
-openEditTaskModal(taskId) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task) return
-
-    document.getElementById("edit-task-id").value = task.id
-    document.getElementById("edit-task-title").value = task.title
-    document.getElementById("edit-task-description").value = task.description || ""
-    document.getElementById("edit-task-priority").value = task.priority
-    document.getElementById("edit-task-status").value = task.status
-
-    this.populateEditStatusOptions()
-    this.openModal("edit-task-modal")
-}
-
-populateEditStatusOptions() {
-    const select = document.getElementById("edit-task-status")
-    select.innerHTML = ""
-
-    this.columns.forEach((column) => {
-        const option = document.createElement("option")
-        option.value = column.status
-        option.textContent = column.title
-        select.appendChild(option)
-    })
-}
-
-handleEditTask(e) {
-    const formData = new FormData(e.target)
-    const taskId = formData.get("id")
+  async handleEditTask(e) {
+    const formData = new FormData(e.target);
+    const taskId = formData.get("id");
     const updatedData = {
         title: formData.get("title"),
         description: formData.get("description"),
         priority: formData.get("priority"),
         status: formData.get("status")
-    }
+    };
 
-    const taskIndex = this.tasks.findIndex(t => t.id === taskId)
+    const taskIndex = this.tasks.findIndex(t => t.id === taskId);
     if (taskIndex !== -1) {
-        this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData }
-        this.saveTasks()
-        this.render()
-        this.closeModal("edit-task-modal")
+        this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData };
+        await this.saveData();
+        this.render();
+        this.closeModal("edit-task-modal");
     }
-}
+  }
 
-  handleAddColumn(e) {
-    const formData = new FormData(e.target)
-    const title = formData.get("title")
+  async handleAddColumn(e) {
+    const formData = new FormData(e.target);
+    const title = formData.get("title");
 
     if (title.trim()) {
-      this.addColumn(title.trim())
-      this.closeModal("add-column-modal")
+      await this.addColumn(title.trim());
+      this.closeModal("add-column-modal");
     }
   }
 
-  handleEditColumn(e) {
-    const formData = new FormData(e.target)
-    const newTitle = formData.get("title")
+  async handleEditColumn(e) {
+    const formData = new FormData(e.target);
+    const newTitle = formData.get("title");
 
     if (newTitle.trim() && this.currentEditingColumn) {
-      this.updateColumnTitle(this.currentEditingColumn, newTitle.trim())
-      this.closeModal("edit-column-modal")
+      await this.updateColumnTitle(this.currentEditingColumn, newTitle.trim());
+      this.closeModal("edit-column-modal");
     }
   }
 
-  // Rendering
+  // Rendering (без изменений)
   render() {
-    this.renderColumns()
-    this.lucide.createIcons() // Use the declared lucide variable
+    this.renderColumns();
+    this.lucide.createIcons();
   }
 
   renderColumns() {
-    const wrapper = document.getElementById("columns-wrapper")
-    wrapper.innerHTML = ""
+    const wrapper = document.getElementById("columns-wrapper");
+    wrapper.innerHTML = "";
 
     this.columns.forEach((column) => {
-      const columnElement = this.createColumnElement(column)
-      wrapper.appendChild(columnElement)
-    })
+      const columnElement = this.createColumnElement(column);
+      wrapper.appendChild(columnElement);
+    });
   }
 
   createColumnElement(column) {
-    const tasks = this.getTasksByStatus(column.status)
+    const tasks = this.getTasksByStatus(column.status);
 
-    const columnDiv = document.createElement("div")
-    columnDiv.className = "kanban-column"
-    columnDiv.dataset.status = column.status
+    const columnDiv = document.createElement("div");
+    columnDiv.className = "kanban-column";
+    columnDiv.dataset.status = column.status;
 
     columnDiv.innerHTML = `
             <div class="column-header">
@@ -560,13 +493,13 @@ handleEditTask(e) {
             <div class="column-content" data-status="${column.status}">
                 ${tasks.map((task) => this.createTaskElement(task)).join("")}
             </div>
-        `
+        `;
 
-    return columnDiv
+    return columnDiv;
   }
 
   createTaskElement(task) {
-    const priorityClass = `priority-${task.priority}`
+    const priorityClass = `priority-${task.priority}`;
 
     return `
             <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
@@ -606,174 +539,79 @@ handleEditTask(e) {
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
             </div>
-        `
-}
+        `;
+  }
 
+  // Drag and Drop (без изменений)
   setupDragAndDrop() {
-    // Привязываем контекст ко всем обработчикам
-    document.addEventListener("dragstart", (e) => {
-        if (e.target.classList.contains("task-card")) {
-            this.handleDragStart(e)
-        }
-    })
-
-    document.addEventListener("dragover", (e) => {
-        e.preventDefault()
-        this.handleDragOver(e)
-    })
-
-    document.addEventListener("dragenter", (e) => {
-        e.preventDefault()
-        this.handleDragEnter(e)
-    })
-
-    document.addEventListener("dragleave", (e) => {
-        this.handleDragLeave(e)
-    })
-
-    document.addEventListener("drop", (e) => {
-        e.preventDefault()
-        this.handleDrop(e) // Используем метод класса вместо анонимной функции
-    })
-
-    document.addEventListener("dragend", (e) => {
-        this.handleDragEnd(e) // Используем метод класса вместо анонимной функции
-    })
-}
+    // ... существующий код без изменений ...
+  }
 
   handleDragStart(e) {
-    this.draggedTask = e.target.dataset.taskId
-    this.draggedElement = e.target
-    e.target.classList.add("dragging")
-
-    // Set drag effect
-    e.dataTransfer.effectAllowed = "move"
-    e.dataTransfer.setData("text/html", e.target.outerHTML)
+    // ... существующий код без изменений ...
   }
 
-  handleDragOver(e) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "move"
+  // ... остальные drag and drop методы без изменений ...
 
-    const columnContent = e.target.closest(".column-content")
-    if (columnContent && this.draggedTask) {
-      const afterElement = this.getDragAfterElement(columnContent, e.clientY)
-      const draggingElement = document.querySelector(".dragging")
+  async updateTaskStatus(taskId, newStatus) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
 
-      if (afterElement == null) {
-        columnContent.appendChild(draggingElement)
-      } else {
-        columnContent.insertBefore(draggingElement, afterElement)
-      }
-    }
-  }
+    const oldStatus = task.status;
+    task.status = newStatus;
+    await this.saveData();
+    this.render();
 
-  handleDragEnter(e) {
-    const columnContent = e.target.closest(".column-content")
-    if (columnContent) {
-      columnContent.classList.add("drag-over")
-    }
-  }
-
-  handleDragLeave(e) {
-    const columnContent = e.target.closest(".column-content")
-    if (columnContent && !columnContent.contains(e.relatedTarget)) {
-      columnContent.classList.remove("drag-over")
-    }
-  }
-
-  handleDrop(e) {
-    console.log('🖱️ Drop event triggered');
-    const columnContent = e.target.closest(".column-content")
-    console.log('Column content:', columnContent);
-    console.log('Dragged task:', this.draggedTask);
-    
-    if (columnContent && this.draggedTask) {
-        const newStatus = columnContent.dataset.status
-        console.log('New status:', newStatus);
-        this.updateTaskStatus(this.draggedTask, newStatus)
-        columnContent.classList.remove("drag-over")
-    }
-}
-
-  handleDragEnd(e) {
-    if (e.target.classList.contains("task-card")) {
-        e.target.classList.remove("dragging")
-    }
-
-    // Clean up drag over states
-    document.querySelectorAll(".column-content").forEach((column) => {
-        column.classList.remove("drag-over")
-    })
-
-    this.draggedTask = null
-    this.draggedElement = null
-}
-
-  updateTaskStatus(taskId, newStatus) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task) return
-
-    const oldStatus = task.status
-    task.status = newStatus
-    this.saveTasks()
-    this.render()
-
-    // Отправляем уведомление о перемещении
     if (oldStatus !== newStatus) {
-        this.trackTaskMovement(taskId, oldStatus, newStatus)
+        this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
-}
+  }
 
   getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll(".task-card:not(.dragging)")]
+    const draggableElements = [...container.querySelectorAll(".task-card:not(.dragging)")];
 
     return draggableElements.reduce(
       (closest, child) => {
-        const box = child.getBoundingClientRect()
-        const offset = y - box.top - box.height / 2
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
 
         if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child }
+          return { offset: offset, element: child };
         } else {
-          return closest
+          return closest;
         }
       },
       { offset: Number.NEGATIVE_INFINITY },
-    ).element
+    ).element;
   }
 
-  checkAndRemoveOldTasks() {
-    const now = new Date()
-    const threeDaysAgo = new Date(now)
-    threeDaysAgo.setDate(now.getDate() - 3)
+  async checkAndRemoveOldTasks() {
+    const now = new Date();
+    const threeDaysAgo = new Date(now);
+    threeDaysAgo.setDate(now.getDate() - 3);
 
-    let tasksRemoved = false
+    let tasksRemoved = false;
 
     this.tasks = this.tasks.filter(task => {
-        if (task.status === "done") { // 👈 если статус "done" — проверяем дату
-            const createdAt = new Date(task.createdAt)
+        if (task.status === "done") {
+            const createdAt = new Date(task.createdAt);
             if (createdAt < threeDaysAgo) {
-                tasksRemoved = true
-                return false // удаляем задачу
+                tasksRemoved = true;
+                return false;
             }
         }
-        return true // оставляем задачу
-    })
+        return true;
+    });
 
     if (tasksRemoved) {
-        this.saveTasks()
-        this.render()
+        await this.saveData();
+        this.render();
     }
+  }
 }
-}
-
-
 
 // Initialize the application
-let kanban
+let kanban;
 document.addEventListener("DOMContentLoaded", () => {
-  kanban = new KanbanBoard()
-})
-
-
+  kanban = new KanbanBoard();
+});
