@@ -22,7 +22,7 @@ setupWebSocket() {
             ? 'localhost:8080' 
             : window.location.host; // Используем текущий хост для продакшена
         
-        this.ws = new WebSocket(`${wsProtocol}//${wsHost}`);
+        this.ws = new WebSocket(`wss://risse-gloom.github.io/necromancertasks`);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
