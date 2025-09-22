@@ -18,7 +18,7 @@ class KanbanBoard {
 setupWebSocket() {
     try {
         // Явно указываем URL вашего Render-сервера
-        const renderUrl = 'wss://kanban-bot.onrender.com'; // Замените на ваш реальный URL Render
+        const renderUrl = 'wss://kanban-bot-pr1v.onrender.com'; // Замените на ваш реальный URL Render
         console.log('🔗 Connecting to WebSocket:', renderUrl);
         
         this.ws = new WebSocket(renderUrl);
