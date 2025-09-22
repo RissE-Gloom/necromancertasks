@@ -17,14 +17,11 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        // Автоматическое определение хоста для работы на Render
-        const host = window.location.hostname;
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const port = window.location.port ? ':' + window.location.port : '';
-        const wsUrl = `${protocol}//${host}${port}`;
+        // Явно указываем URL вашего Render-сервера
+        const renderUrl = 'wss://kanban-bot.onrender.com'; // Замените на ваш реальный URL Render
+        console.log('🔗 Connecting to WebSocket:', renderUrl);
         
-        console.log('🔗 Connecting to WebSocket:', wsUrl);
-        this.ws = new WebSocket(wsUrl);
+        this.ws = new WebSocket(renderUrl);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
@@ -50,7 +47,6 @@ setupWebSocket() {
     } catch (error) {
         console.error('WebSocket setup error:', error);
     }
-}
 
 attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
