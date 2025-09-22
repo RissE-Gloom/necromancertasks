@@ -18,11 +18,9 @@ class KanbanBoard {
 setupWebSocket() {
     try {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.hostname === 'localhost' 
-            ? 'localhost:8080' 
-            : window.location.host; // Используем текущий хост для продакшена
+        const wsPort = window.location.hostname === 'localhost' ? ':8080' : '';
         
-        this.ws = new WebSocket(`wss://necromancertasks.onrender.com/ws`);
+        this.ws = new WebSocket(`${wsProtocol}//${window.location.hostname}${wsPort}`);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
