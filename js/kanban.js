@@ -47,6 +47,7 @@ setupWebSocket() {
     } catch (error) {
         console.error('WebSocket setup error:', error);
     }
+}
 
 attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
