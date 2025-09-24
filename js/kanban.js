@@ -4,15 +4,15 @@ class KanbanBoard {
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
     this.currentEditingColumn = null
-    this.lucide = window.lucide // Declare the lucide variable
+    this.lucide = window.lucide
     this.draggedTask = null
     this.draggedElement = null
     this.ws = null;
-    this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
-    this.syncPending = false; // 👈 Добавляем флаг синхронизации
-    this.pendingSyncRequests = new Map(); // 👈 Добавляем карту ожидающих запросов
+    this.syncPending = false;
+    this.pendingSyncRequests = new Map();
+    this.clientType = 'browser'; // 👈 Добавляем тип клиента
 
     this.init()
   }
@@ -21,16 +21,25 @@ class KanbanBoard {
     try {
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsPort = window.location.hostname === 'localhost' ? ':8080' : '';
+        const isMiniApp = window.Telegram?.WebApp?.initData || window.location.search.includes('miniApp=true');
         
-        this.ws = new WebSocket(`${wsProtocol}//${window.location.hostname}${wsPort}`);
+        // 👇 Добавляем параметр для идентификации типа клиента
+        const wsUrl = `${wsProtocol}//${window.location.hostname}${wsPort}?clientType=${isMiniApp ? 'miniApp' : 'browser'}`;
+        
+        this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
             this.retryCount = 0;
             this.ws.send(JSON.stringify({ type: 'PING' }));
+            
+            // 👇 Если это Mini App, запрашиваем синхронизацию при подключении
+            if (isMiniApp) {
+                this.requestSync();
+            }
         };
 
-        // 👇 Добавляем обработчик сообщений для синхронизации
+        // 👇 Улучшаем обработчик сообщений
         this.ws.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data);
@@ -42,21 +51,44 @@ class KanbanBoard {
                         this.handleSyncData(message);
                         break;
                     case 'SYNC_REQUESTED':
-                        this.handleSyncRequested(message);
+                        if (!isMiniApp) { // 👇 Только браузер обрабатывает запросы синхронизации
+                            this.handleSyncRequested(message);
+                        }
                         break;
                     case 'SYNC_CONFIRMED':
                         this.handleSyncConfirmed(message);
                         break;
+                    case 'CONNECTION_ESTABLISHED':
+                        console.log('✅ Connection confirmed by server');
+                        if (message.clientType) {
+                            this.clientType = message.clientType;
+                        }
+                        break;
+                    case 'TASK_MOVED':
+                    case 'TASK_CREATED':
+                    case 'TASK_UPDATED':
+                    case 'TASK_DELETED':
+                        if (isMiniApp) { // 👇 Mini App обрабатывает изменения от браузера
+                            this.handleChangeNotification(message);
+                        }
+                        break;
                     default:
-                        // Стандартная обработка сообщений от бота
                         this.handleBotMessage(event.data);
                         break;
                 }
             } catch (error) {
                 console.error('Message processing error:', error);
-                // fallback to original handler
                 this.handleBotMessage(event.data);
             }
+        };
+
+        this.ws.onclose = () => {
+            console.log('❌ WebSocket disconnected');
+            this.attemptReconnect();
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
         };
 
     } catch (error) {
@@ -64,7 +96,7 @@ class KanbanBoard {
     }
   }
 
-  // 👇 Добавляем методы для обработки синхронизации
+  // 👇 Улучшенный обработчик синхронизации
   handleSyncData(message) {
     if (message.tasks && message.columns) {
         console.log('🔄 Receiving sync data');
@@ -77,12 +109,14 @@ class KanbanBoard {
         this.saveColumns();
         this.render();
         
-        // Подтверждаем получение
-        this.sendToBot({
-            type: 'SYNC_CONFIRMED',
-            syncId: message.syncId,
-            timestamp: new Date().toISOString()
-        });
+        // Подтверждаем получение (только если это не исходило от нас)
+        if (message.syncId && !this.pendingSyncRequests.has(message.syncId)) {
+            this.sendToBot({
+                type: 'SYNC_CONFIRMED',
+                syncId: message.syncId,
+                timestamp: new Date().toISOString()
+            });
+        }
     }
   }
 
@@ -90,7 +124,7 @@ class KanbanBoard {
     console.log('📬 Sync requested by Mini App');
     
     // Отправляем текущее состояние
-    this.sendSyncData();
+    this.sendSyncData(message.requestId);
   }
 
   handleSyncConfirmed(message) {
@@ -98,10 +132,71 @@ class KanbanBoard {
         console.log('✅ Sync confirmed:', message.syncId);
         this.pendingSyncRequests.delete(message.syncId);
         this.syncPending = false;
+        
+        // Обновляем UI если нужно
+        this.updateSyncButton(false);
     }
   }
 
-  sendSyncData() {
+  // 👇 Новый метод для обработки уведомлений об изменениях
+  handleChangeNotification(message) {
+    console.log('📝 Processing change notification:', message.type);
+    
+    switch (message.type) {
+        case 'TASK_MOVED':
+            this.applyTaskMove(message);
+            break;
+        case 'TASK_CREATED':
+            this.applyTaskCreate(message);
+            break;
+        case 'TASK_UPDATED':
+            this.applyTaskUpdate(message);
+            break;
+        case 'TASK_DELETED':
+            this.applyTaskDelete(message);
+            break;
+    }
+  }
+
+  applyTaskMove(message) {
+    const task = this.tasks.find(t => t.id === message.taskId);
+    if (task && task.status !== message.toStatus) {
+        task.status = message.toStatus;
+        this.saveTasks();
+        this.render();
+    }
+  }
+
+  applyTaskCreate(message) {
+    const existingTask = this.tasks.find(t => t.id === message.task.id);
+    if (!existingTask) {
+        this.tasks.push({
+            ...message.task,
+            createdAt: message.timestamp,
+            description: message.task.description || '',
+            label: message.task.label || ''
+        });
+        this.saveTasks();
+        this.render();
+    }
+  }
+
+  applyTaskUpdate(message) {
+    const taskIndex = this.tasks.findIndex(t => t.id === message.taskId);
+    if (taskIndex !== -1) {
+        this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...message.updatedData };
+        this.saveTasks();
+        this.render();
+    }
+  }
+
+  applyTaskDelete(message) {
+    this.tasks = this.tasks.filter(t => t.id !== message.taskId);
+    this.saveTasks();
+    this.render();
+  }
+
+  sendSyncData(requestId = null) {
     const syncData = {
         type: 'SYNC_DATA',
         syncId: this.generateId(),
@@ -109,6 +204,10 @@ class KanbanBoard {
         columns: this.columns,
         timestamp: new Date().toISOString()
     };
+    
+    if (requestId) {
+        syncData.requestId = requestId;
+    }
     
     this.sendToBot(syncData);
   }
@@ -119,6 +218,8 @@ class KanbanBoard {
         timestamp: Date.now(),
         status: 'pending'
     });
+    
+    this.updateSyncButton(true);
     
     this.sendToBot({
         type: 'REQUEST_SYNC',
@@ -131,11 +232,28 @@ class KanbanBoard {
         if (this.pendingSyncRequests.has(requestId)) {
             console.log('⏰ Sync request timeout');
             this.pendingSyncRequests.delete(requestId);
+            this.updateSyncButton(false);
         }
     }, 5000);
   }
 
-  // 👇 Модифицируем методы изменения данных для автоматической синхронизации
+  updateSyncButton(isSyncing) {
+    const syncButton = document.getElementById('sync-btn');
+    if (syncButton) {
+        if (isSyncing) {
+            syncButton.innerHTML = '<i data-lucide="loader" class="spin"></i> Синхронизация...';
+            syncButton.disabled = true;
+        } else {
+            syncButton.innerHTML = '<i data-lucide="refresh-cw"></i> Синхронизировать';
+            syncButton.disabled = false;
+        }
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    }
+  }
+
+  // 👇 Модифицируем методы для отправки изменений вместо полной синхронизации
   addTask(taskData) {
     const task = {
         id: this.generateId(),
@@ -159,92 +277,151 @@ class KanbanBoard {
         task: {
             id: task.id,
             title: task.title,
-            label: task.label || ''
+            description: task.description,
+            priority: task.priority,
+            label: task.label
         }
     });
     
-    // 👇 Автоматическая синхронизация после добавления задачи
-    this.sendSyncData();
     this.render();
   }
 
   deleteTask(taskId) {
-    this.tasks = this.tasks.filter((t) => t.id !== taskId)
-    this.saveTasks()
-    
-    // 👇 Синхронизация после удаления
-    this.sendSyncData();
-    this.render()
+    const task = this.tasks.find(t => t.id === taskId);
+    if (task) {
+        this.tasks = this.tasks.filter((t) => t.id !== taskId);
+        this.saveTasks();
+        
+        // Отправляем уведомление об удалении
+        this.sendToBot({
+            type: 'TASK_DELETED',
+            taskId: taskId,
+            timestamp: new Date().toISOString()
+        });
+        
+        this.render();
+    }
   }
 
   updateTaskStatus(taskId, newStatus) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task) return
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
 
-    const oldStatus = task.status
-    task.status = newStatus
-    this.saveTasks()
-    this.render()
+    const oldStatus = task.status;
+    task.status = newStatus;
+    this.saveTasks();
+    this.render();
 
     // Отправляем уведомление о перемещении
     if (oldStatus !== newStatus) {
-        this.trackTaskMovement(taskId, oldStatus, newStatus)
+        this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
-    
-    // 👇 Синхронизация после изменения статуса
-    this.sendSyncData();
   }
 
-  // 👇 Модифицируем методы управления колонками для синхронизации
+  // 👇 Модифицируем handleEditTask для отправки изменений
+  handleEditTask(e) {
+    const formData = new FormData(e.target);
+    const taskId = formData.get("id");
+    const updatedData = {
+        title: formData.get("title"),
+        description: formData.get("description"),
+        priority: formData.get("priority"),
+        status: formData.get("status")
+    };
+
+    const taskIndex = this.tasks.findIndex(t => t.id === taskId);
+    if (taskIndex !== -1) {
+        const oldTask = { ...this.tasks[taskIndex] };
+        this.tasks[taskIndex] = { ...oldTask, ...updatedData };
+        this.saveTasks();
+        
+        // Отправляем уведомление об обновлении
+        this.sendToBot({
+            type: 'TASK_UPDATED',
+            taskId: taskId,
+            updatedData: updatedData,
+            timestamp: new Date().toISOString()
+        });
+        
+        this.render();
+        this.closeModal("edit-task-modal");
+    }
+  }
+
+  // 👇 Добавляем обработку изменений колонок
   addColumn(title) {
-    const status = title.toLowerCase().replace(/\s+/g, "-")
+    const status = title.toLowerCase().replace(/\s+/g, "-");
     const column = {
       id: status,
       title: title,
       status: status,
-    }
+    };
 
-    this.columns.push(column)
-    this.saveColumns()
+    this.columns.push(column);
+    this.saveColumns();
+    this.render();
     
-    // 👇 Синхронизация после добавления колонки
+    // Полная синхронизация при изменении структуры колонок
     this.sendSyncData();
-    this.render()
   }
 
   updateColumnTitle(status, newTitle) {
-    const column = this.columns.find((c) => c.status === status)
+    const column = this.columns.find((c) => c.status === status);
     if (column) {
-      column.title = newTitle
-      this.saveColumns()
+      column.title = newTitle;
+      this.saveColumns();
+      this.render();
       
-      // 👇 Синхронизация после изменения названия колонки
+      // Полная синхронизация при изменении структуры колонок
       this.sendSyncData();
-      this.render()
     }
   }
 
   deleteColumn(status) {
-    if (this.columns.length <= 1) return
+    if (this.columns.length <= 1) return;
 
     // Move tasks from deleted column to first available column
-    const tasksInColumn = this.getTasksByStatus(status)
+    const tasksInColumn = this.getTasksByStatus(status);
     if (tasksInColumn.length > 0) {
-      const remainingColumns = this.columns.filter((c) => c.status !== status)
-      const targetStatus = remainingColumns[0].status
+      const remainingColumns = this.columns.filter((c) => c.status !== status);
+      const targetStatus = remainingColumns[0].status;
 
       tasksInColumn.forEach((task) => {
-        task.status = targetStatus
-      })
-      this.saveTasks()
+        task.status = targetStatus;
+      });
+      this.saveTasks();
     }
 
-    this.columns = this.columns.filter((c) => c.status !== status)
-    this.saveColumns()
+    this.columns = this.columns.filter((c) => c.status !== status);
+    this.saveColumns();
+    this.render();
     
-    // 👇 Синхронизация после удаления колонки
+    // Полная синхронизация при изменении структуры колонок
     this.sendSyncData();
-    this.render()
+  }
+
+  // 👇 Улучшаем trackTaskMovement для более детальной информации
+  trackTaskMovement(taskId, fromStatus, toStatus) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const activity = {
+        type: 'TASK_MOVED',
+        taskId,
+        fromStatus,
+        toStatus,
+        timestamp: new Date().toISOString(),
+        task: {
+            id: task.id,
+            title: task.title,
+            priority: task.priority,
+            label: task.label || '',
+            description: task.description || ''
+        }
+    };
+    
+    console.log('🔄 Tracking task movement:', activity);
+    this.sendToBot(activity);
   }
 
   // 👇 Модифицируем handleEditTask для синхронизации
