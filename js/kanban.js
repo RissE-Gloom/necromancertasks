@@ -53,9 +53,13 @@ attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
         this.retryCount++;
         console.log(`🔁 Attempting reconnect (${this.retryCount}/${this.maxRetries})...`);
-        setTimeout(() => this.setupWebSocket(), 3000);
+        
+        // Экспоненциальная задержка
+        const delay = Math.min(3000 * Math.pow(2, this.retryCount), 30000);
+        setTimeout(() => this.setupWebSocket(), delay);
     } else {
         console.log('❌ Max reconnection attempts reached');
+        // Можно показать уведомление пользователю
     }
 }
 
