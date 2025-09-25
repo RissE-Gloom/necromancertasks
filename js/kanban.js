@@ -17,9 +17,7 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        const wsUrl = window.location.protocol === 'https:' 
-            ? 'wss://kanban-bot-pr1v.onrender.com'
-            : 'ws://kanban-bot-pr1v.onrender.com';
+        const wsUrl = 'wss://kanban-bot-pr1v.onrender.com';
         
         this.ws = new WebSocket(wsUrl);
         
@@ -35,12 +33,17 @@ setupWebSocket() {
             this.handleBotMessage(event.data);
         };
 
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+        this.ws.onopen = () => {
+            console.log('✅ WebSocket connected successfully');
+            this.retryCount = 0;
         };
 
-        this.ws.onclose = () => {
-            console.log('❌ Disconnected from bot server');
+        this.ws.onerror = (error) => {
+            console.error('❌ WebSocket error:', error);
+        };
+
+        this.ws.onclose = (event) => {
+            console.log('🔌 WebSocket closed:', event.code, event.reason);
             this.attemptReconnect();
         };
 
