@@ -17,7 +17,11 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        this.ws = new WebSocket('ws://localhost:8080');
+        const wsUrl = window.location.protocol === 'https:' 
+            ? 'wss://kanban-bot-pr1v.onrender.com'
+            : 'ws://kanban-bot-pr1v.onrender.com';
+        
+        this.ws = new WebSocket(wsUrl);
         
         this.ws.onopen = () => {
             console.log('✅ Connected to bot server');
