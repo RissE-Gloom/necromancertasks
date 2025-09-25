@@ -17,7 +17,7 @@ class KanbanBoard {
 
 setupWebSocket() {
     try {
-        const wsUrl = 'wss://kanban-bot-pr1v.onrender.com';
+        const wsUrl = 'wss://kanban-bot-pr1v.onrender.com/ws';
         
         this.ws = new WebSocket(wsUrl);
         
