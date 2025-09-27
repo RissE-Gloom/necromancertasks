@@ -67,6 +67,7 @@ async initFirebase() {
     setInterval(() => {
       this.checkAndRemoveOldTasks();
     }, 300000);
+}
 
 setupWebSocket() {
     try {
