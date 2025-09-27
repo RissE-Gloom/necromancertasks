@@ -26,10 +26,6 @@ class FirebaseService {
             this.isInitialized = true;
             console.log('✅ Firebase initialized');
         } catch (error) {
-            console.error('❌ Firebase init failed:', error);
-        }
-    }
-        } catch (error) {
             console.error('❌ Firebase initialization failed:', error);
         }
     }
