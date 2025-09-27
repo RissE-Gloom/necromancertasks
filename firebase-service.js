@@ -15,14 +15,20 @@ class FirebaseService {
 
     async init() {
         try {
-            // Динамически загружаем Firebase SDK
-            await this.loadFirebaseSDK();
+            // Проверяем, загружен ли Firebase
+            if (typeof firebase === 'undefined') {
+                console.error('Firebase not loaded');
+                return;
+            }
             
-            this.app = window.firebase.initializeApp(this.firebaseConfig);
-            this.db = window.firebase.database();
+            this.app = firebase.initializeApp(this.firebaseConfig); 
+            this.db = firebase.database();
             this.isInitialized = true;
-            
-            console.log('✅ Firebase initialized successfully');
+            console.log('✅ Firebase initialized');
+        } catch (error) {
+            console.error('❌ Firebase init failed:', error);
+        }
+    }
         } catch (error) {
             console.error('❌ Firebase initialization failed:', error);
         }
