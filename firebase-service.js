@@ -4,11 +4,12 @@ class FirebaseService {
         this.isInitialized = false;
         this.firebaseConfig = {
             apiKey: "AIzaSyAqnTZXQDuCF3QqxhOhwTRXCulDaLO_iUI",
-  authDomain: "berloga-lisy.firebaseapp.com",
-  projectId: "berloga-lisy",
-  storageBucket: "berloga-lisy.firebasestorage.app",
-  messagingSenderId: "266173768415",
-  appId: "1:266173768415:web:46e245024336974a7c3f6a"
+            authDomain: "berloga-lisy.firebaseapp.com",
+            databaseURL: "https://berloga-lisy-default-rtdb.europe-west1.firebasedatabase.app", 
+            projectId: "berloga-lisy",
+            storageBucket: "berloga-lisy.firebasestorage.app",
+            messagingSenderId: "266173768415",
+            appId: "1:266173768415:web:46e245024336974a7c3f6a"
         }; 
         this.init();
     }
