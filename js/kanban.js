@@ -1,4 +1,6 @@
 // Core Kanban Board Application
+import FirebaseService from './firebase-service.js';
+
 class KanbanBoard {
   constructor() {
     this.tasks = this.loadTasks()
