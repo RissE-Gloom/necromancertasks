@@ -9,6 +9,7 @@ class FirebaseService {
             storageBucket: "FIREBASE_STORAGE_BUCKET",
             messagingSenderId: "FIREBASE_MESSAGINGSENDERID",
             appId: "FIREBASE_APPID"
+        }; 
         this.init();
     }
 
