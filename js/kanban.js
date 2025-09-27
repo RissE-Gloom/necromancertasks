@@ -246,24 +246,24 @@ sendToBot(message) {
 }
 
   // Data Management
-  loadTasks() {
+loadTasks() {
     const saved = localStorage.getItem("kanban-tasks")
     return saved ? JSON.parse(saved) : []
-  }
+}
 
-  saveTasks() {
+async saveTasks() {
     if (this.isOnline) {
-            const success = await this.firebase.saveTasks(this.tasks);
-            if (!success) {
-                // Fallback на localStorage если Firebase недоступен
-                localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
-            }
-        } else {
+        const success = await this.firebase.saveTasks(this.tasks);
+        if (!success) {
+            // Fallback на localStorage если Firebase недоступен
             localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
         }
+    } else {
+        localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
     }
+}
 
-  loadColumns() {
+loadColumns() {
     const saved = localStorage.getItem("kanban-columns")
     return saved
       ? JSON.parse(saved)
@@ -272,22 +272,22 @@ sendToBot(message) {
           { id: "in-progress", title: "In Progress", status: "in-progress" },
           { id: "done", title: "Done", status: "done" },
         ]
-  }
+}
 
-  saveColumns() {
+async saveColumns() {
     if (this.isOnline) {
-            const success = await this.firebase.saveColumns(this.columns);
-            if (!success) {
-                // Fallback на localStorage если Firebase недоступен
-                localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
-            }
-        } else {
-            localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
+        const success = await this.firebase.saveColumns(this.columns);
+        if (!success) {
+            // Fallback на localStorage если Firebase недоступен
+            localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
         }
+    } else {
+        localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
     }
+}
 
-  // Task Management
-addTask(taskData) {
+// Task Management
+async addTask(taskData) {
     const task = {
         id: this.generateId(),
         title: taskData.title,
@@ -299,7 +299,7 @@ addTask(taskData) {
     };
 
     this.tasks.push(task);
-    this.saveTasks();
+    await this.saveTasks();
     
     // Отправляем уведомление о создании
     this.sendToBot({
@@ -317,18 +317,18 @@ addTask(taskData) {
     this.render();
 }
 
-  deleteTask(taskId) {
-    this.tasks = this.tasks.filter((t) => t.id !== taskId)
-    this.saveTasks()
-    this.render()
-  }
+async deleteTask(taskId) { 
+    this.tasks = this.tasks.filter((t) => t.id !== taskId);
+    await this.saveTasks(); 
+    this.render();
+}
 
-  getTasksByStatus(status) {
+getTasksByStatus(status) {
     return this.tasks.filter((task) => task.status === status)
-  }
+}
 
-  // Column Management
-  addColumn(title) {
+// Column Management
+async addColumn(title) {
     const status = title.toLowerCase().replace(/\s+/g, "-")
     const column = {
       id: status,
@@ -337,20 +337,20 @@ addTask(taskData) {
     }
 
     this.columns.push(column)
-    this.saveColumns()
+    await this.saveColumns()
     this.render()
-  }
+}
 
-  updateColumnTitle(status, newTitle) {
+async updateColumnTitle(status, newTitle) {
     const column = this.columns.find((c) => c.status === status)
     if (column) {
       column.title = newTitle
-      this.saveColumns()
+      await this.saveColumns()
       this.render()
     }
-  }
+}
 
-  deleteColumn(status) {
+async deleteColumn(status) {
     if (this.columns.length <= 1) return
 
     // Move tasks from deleted column to first available column
@@ -362,13 +362,13 @@ addTask(taskData) {
       tasksInColumn.forEach((task) => {
         task.status = targetStatus
       })
-      this.saveTasks()
+      await this.saveTasks()
     }
 
     this.columns = this.columns.filter((c) => c.status !== status)
-    this.saveColumns()
+    await this.saveColumns()
     this.render()
-  }
+}
 
   // Utility Methods
   generateId() {
