@@ -3,13 +3,12 @@ class FirebaseService {
     constructor() {
         this.isInitialized = false;
         this.firebaseConfig = {
-            apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGINGSENDERID,
-  appId: process.env.FIREBASE_APPID
-        };
+            apiKey: "FIREBASE_API_KEY,
+            authDomain: "FIREBASE_AUTH_DOMAIN",
+            projectId: "FIREBASE_PROJECT_ID",
+            storageBucket: "FIREBASE_STORAGE_BUCKET",
+            messagingSenderId: "FIREBASE_MESSAGINGSENDERID",
+            appId: "FIREBASE_APPID"
         this.init();
     }
 
