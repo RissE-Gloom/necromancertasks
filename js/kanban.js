@@ -86,11 +86,6 @@ setupWebSocket() {
             this.handleBotMessage(event.data);
         };
 
-        this.ws.onopen = () => {
-            console.log('✅ WebSocket connected successfully');
-            this.retryCount = 0;
-        };
-
         this.ws.onerror = (error) => {
             console.error('❌ WebSocket error:', error);
         };
