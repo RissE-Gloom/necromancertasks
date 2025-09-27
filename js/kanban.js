@@ -98,7 +98,7 @@ setupWebSocket() {
     } catch (error) {
         console.error('WebSocket setup error:', error);
     }
-}
+ }
 
 attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
@@ -261,7 +261,6 @@ sendToBot(message) {
             localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
         }
     }
-  }
 
   loadColumns() {
     const saved = localStorage.getItem("kanban-columns")
@@ -285,8 +284,6 @@ sendToBot(message) {
             localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
         }
     }
-    
-  }
 
   // Task Management
 addTask(taskData) {
