@@ -3,6 +3,13 @@ import FirebaseService from './firebase-service.js';
 
 class KanbanBoard {
   constructor() {
+    // Инициализируем Firebase
+    this.firebase = new FirebaseService();
+    this.isOnline = false;
+    
+    // Загружаем данные асинхронно
+    this.initFirebase();  // ← вызов асинхронной инициализации
+    
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
     this.currentEditingColumn = null
@@ -14,8 +21,52 @@ class KanbanBoard {
     this.retryCount = 0;
     this.maxRetries = 5;
 
-    this.init()
+    // this.init()
   }
+
+async initFirebase() {
+    try {
+      // Ждем инициализации Firebase
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      if (this.firebase.isInitialized) {
+        // Загружаем данные из Firebase
+        this.tasks = await this.firebase.loadTasks();
+        this.columns = await this.firebase.loadColumns();
+        this.isOnline = true;
+        
+        // Настраиваем реальное время синхронизацию
+        this.firebase.setupRealtimeSync((tasks, columns) => {
+          console.log('🔄 Real-time update from Firebase');
+          this.tasks = Object.values(tasks || {});
+          this.columns = Object.values(columns || {});
+          this.render();
+        });
+        
+        console.log('✅ Using Firebase for data storage');
+      } else {
+        throw new Error('Firebase not initialized');
+      }
+    } catch (error) {
+      console.log('⚠️ Using localStorage as fallback');
+      // Fallback на localStorage
+      this.tasks = this.loadTasks();
+      this.columns = this.loadColumns();
+      this.isOnline = false;
+    }
+
+    // Инициализация приложения после загрузки данных
+    this.setupWebSocket();
+    this.setupEventListeners();
+    this.setupDragAndDrop();
+    this.checkAndRemoveOldTasks();
+    this.render();
+    this.lucide.createIcons();
+
+    // Интервал для проверки старых задач
+    setInterval(() => {
+      this.checkAndRemoveOldTasks();
+    }, 300000);
 
 setupWebSocket() {
     try {
