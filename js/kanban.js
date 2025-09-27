@@ -1,5 +1,5 @@
 // Core Kanban Board Application
-import FirebaseService from './firebase-service.js';
+import FirebaseService from '../js/firebase-service.js';
 
 class KanbanBoard {
   constructor() {
