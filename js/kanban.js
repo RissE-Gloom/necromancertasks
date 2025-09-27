@@ -256,7 +256,16 @@ sendToBot(message) {
   }
 
   saveTasks() {
-    localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks))
+    if (this.isOnline) {
+            const success = await this.firebase.saveTasks(this.tasks);
+            if (!success) {
+                // Fallback на localStorage если Firebase недоступен
+                localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+            }
+        } else {
+            localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+        }
+    }
   }
 
   loadColumns() {
@@ -271,7 +280,17 @@ sendToBot(message) {
   }
 
   saveColumns() {
-    localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
+    if (this.isOnline) {
+            const success = await this.firebase.saveColumns(this.columns);
+            if (!success) {
+                // Fallback на localStorage если Firebase недоступен
+                localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+            }
+        } else {
+            localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
+        }
+    }
+    
   }
 
   // Task Management
