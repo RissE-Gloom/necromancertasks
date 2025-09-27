@@ -1,9 +1,15 @@
 // firebase-service.js
-import { firebaseConfig } from './firebase-config.js';
-
 class FirebaseService {
     constructor() {
         this.isInitialized = false;
+        this.firebaseConfig = {
+            apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGINGSENDERID,
+  appId: process.env.FIREBASE_APPID
+        };
         this.init();
     }
 
@@ -12,7 +18,7 @@ class FirebaseService {
             // Динамически загружаем Firebase SDK
             await this.loadFirebaseSDK();
             
-            this.app = window.firebase.initializeApp(firebaseConfig);
+            this.app = window.firebase.initializeApp(this.firebaseConfig);
             this.db = window.firebase.database();
             this.isInitialized = true;
             
@@ -81,6 +87,47 @@ class FirebaseService {
                 })
                 .catch(error => {
                     console.error('Error loading tasks:', error);
+                    resolve([]);
+                });
+        });
+    }
+
+    async saveColumns(columns) {
+        if (!this.isInitialized) {
+            console.warn('Firebase not initialized');
+            return false;
+        }
+
+        try {
+            const columnsObj = {};
+            columns.forEach(column => {
+                columnsObj[column.id] = column;
+            });
+            
+            await this.db.ref(`projects/default/columns`).set(columnsObj);
+            await this.updateTimestamp();
+            return true;
+        } catch (error) {
+            console.error('Error saving columns:', error);
+            return false;
+        }
+    }
+
+    async loadColumns() {
+        return new Promise((resolve) => {
+            if (!this.isInitialized) {
+                resolve([]);
+                return;
+            }
+
+            this.db.ref('projects/default/columns').once('value')
+                .then(snapshot => {
+                    const data = snapshot.val();
+                    const columns = data ? Object.values(data) : [];
+                    resolve(columns);
+                })
+                .catch(error => {
+                    console.error('Error loading columns:', error);
                     resolve([]);
                 });
         });
