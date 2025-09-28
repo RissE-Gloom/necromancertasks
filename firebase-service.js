@@ -1,7 +1,6 @@
 // firebase-service.js
 class FirebaseService {
     constructor() {
-        this.setupGlobalHandlers();
         this.isInitialized = false;
         this.firebaseConfig = {
             apiKey: "AIzaSyAqnTZXQDuCF3QqxhOhwTRXCulDaLO_iUI",
