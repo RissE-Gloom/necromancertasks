@@ -608,6 +608,8 @@ handleEditTask(e) {
     
     // Привязываем обработчики событий после рендера
     this.setupDynamicEventListeners();
+
+    console.log('Columns order:', this.columns.map(c => ({ title: c.title, order: c.order })));
   }
 
   createColumnElement(column) {
