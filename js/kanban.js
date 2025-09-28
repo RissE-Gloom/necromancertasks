@@ -268,9 +268,9 @@ loadColumns() {
     return saved
       ? JSON.parse(saved)
       : [
-          { id: "todo", title: "To Do", status: "todo", order: 0 },
-          { id: "in-progress", title: "In Progress", status: "in-progress", order: 1 },
-          { id: "done", title: "Done", status: "done", order: 2 },
+          { id: "todo", title: "To Do", status: "todo" },
+          { id: "in-progress", title: "In Progress", status: "in-progress" },
+          { id: "done", title: "Done", status: "done" },
         ]
   return columns.map((col, index) => ({
         ...col,
