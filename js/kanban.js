@@ -268,10 +268,14 @@ loadColumns() {
     return saved
       ? JSON.parse(saved)
       : [
-          { id: "todo", title: "To Do", status: "todo" },
-          { id: "in-progress", title: "In Progress", status: "in-progress" },
-          { id: "done", title: "Done", status: "done" },
+          { id: "todo", title: "To Do", status: "todo", order: 0 },
+          { id: "in-progress", title: "In Progress", status: "in-progress", order: 1 },
+          { id: "done", title: "Done", status: "done", order: 2 },
         ]
+  return columns.map((col, index) => ({
+        ...col,
+        order: col.order !== undefined ? col.order : index
+    }));
 }
 
 async saveColumns() {
@@ -334,6 +338,7 @@ async addColumn(title) {
       id: status,
       title: title,
       status: status,
+      order: this.columns.length
     }
 
     this.columns.push(column)
@@ -601,16 +606,23 @@ handleEditTask(e) {
     const wrapper = document.getElementById("columns-wrapper")
     wrapper.innerHTML = ""
 
-    this.columns.forEach((column) => {
-      const columnElement = this.createColumnElement(column)
-      wrapper.appendChild(columnElement)
+    // Сортируем колонки по порядку перед рендером
+    const sortedColumns = [...this.columns].sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 0;
+        const orderB = b.order !== undefined ? b.order : 0;
+        return orderA - orderB;
+    });
+
+    sortedColumns.forEach((column) => {
+        const columnElement = this.createColumnElement(column)
+        wrapper.appendChild(columnElement)
     })
     
     // Привязываем обработчики событий после рендера
     this.setupDynamicEventListeners();
 
-    console.log('Columns order:', this.columns.map(c => ({ title: c.title, order: c.order })));
-  }
+    console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
+}
 
   createColumnElement(column) {
     const tasks = this.getTasksByStatus(column.status)
