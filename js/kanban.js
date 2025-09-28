@@ -20,21 +20,9 @@ class KanbanBoard {
     this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
-    this.setupGlobalHandlers();
 
     // this.init()
   }
-
-setupGlobalHandlers() {
-        // Вешаем обработчики на document
-        document.addEventListener('click', (e) => {
-            if (e.target.closest('[data-action="edit-column"]')) {
-                const status = e.target.closest('button').dataset.status;
-                this.openEditColumnModal(status, '');
-            }
-            // ... другие обработчики
-        });
-    }
 
 async initFirebase() {
     try {
@@ -617,6 +605,9 @@ handleEditTask(e) {
       const columnElement = this.createColumnElement(column)
       wrapper.appendChild(columnElement)
     })
+    
+    // Привязываем обработчики событий после рендера
+    this.setupDynamicEventListeners();
   }
 
   createColumnElement(column) {
@@ -633,10 +624,10 @@ handleEditTask(e) {
                     <span class="task-count">${tasks.length}</span>
                 </div>
                 <div class="column-actions">
-                    <button class="btn-icon" onclick="kanban.openEditColumnModal('${column.status}', '${column.title}')" title="Edit column">
+                    <button class="btn-icon edit-column-btn" data-status="${column.status}" data-title="${column.title}" title="Edit column">
                         <i data-lucide="edit-2"></i>
                     </button>
-                    <button class="btn-icon" onclick="kanban.deleteColumn('${column.status}')" title="Delete column">
+                    <button class="btn-icon delete-column-btn" data-status="${column.status}" title="Delete column">
                         <i data-lucide="trash-2"></i>
                     </button>
                 </div>
@@ -665,18 +656,18 @@ handleEditTask(e) {
                                 ${this.columns
                                   .map((col) =>
                                     col.status !== task.status
-                                      ? `<button class="dropdown-item" onclick="kanban.updateTaskStatus('${task.id}', '${col.status}')">
+                                      ? `<button class="dropdown-item move-task-btn" data-task-id="${task.id}" data-target-status="${col.status}">
                                              <i data-lucide="arrow-right"></i>
                                              Перекинуть ${col.title}
                                            </button>`
-                                      : "",
+                                      : ""
                                   )
                                   .join("")}
-                                  <button class="dropdown-item" onclick="kanban.openEditTaskModal('${task.id}')">
+                                  <button class="dropdown-item edit-task-btn" data-task-id="${task.id}">
                                      <i data-lucide="edit"></i>
                                      Редактировать
                                   </button>
-                                <button class="dropdown-item delete" onclick="kanban.deleteTask('${task.id}')">
+                                <button class="dropdown-item delete-task-btn delete" data-task-id="${task.id}">
                                     <i data-lucide="trash-2"></i>
                                     Удалить
                                 </button>
@@ -691,7 +682,48 @@ handleEditTask(e) {
                 </div>
             </div>
         `
-}
+  }
+
+  // Новый метод для привязки динамических обработчиков
+  setupDynamicEventListeners() {
+    // Обработчики для кнопок колонок
+    document.querySelectorAll('.edit-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.edit-column-btn').dataset.status;
+        const title = e.target.closest('.edit-column-btn').dataset.title;
+        this.openEditColumnModal(status, title);
+      });
+    });
+
+    document.querySelectorAll('.delete-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.delete-column-btn').dataset.status;
+        this.deleteColumn(status);
+      });
+    });
+
+    // Обработчики для кнопок задач (делегирование событий)
+    document.addEventListener('click', (e) => {
+      // Редактирование задачи
+      if (e.target.closest('.edit-task-btn')) {
+        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+        this.openEditTaskModal(taskId);
+      }
+      
+      // Удаление задачи
+      if (e.target.closest('.delete-task-btn')) {
+        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+        this.deleteTask(taskId);
+      }
+      
+      // Перемещение задачи
+      if (e.target.closest('.move-task-btn')) {
+        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+        this.updateTaskStatus(taskId, targetStatus);
+      }
+    });
+  }
 
   setupDragAndDrop() {
     // Привязываем контекст ко всем обработчикам
@@ -852,12 +884,10 @@ handleEditTask(e) {
 }
 }
 
-
-
 // Initialize the application
-let kanban
+let kanban;
 document.addEventListener("DOMContentLoaded", () => {
-  kanban = new KanbanBoard()
-})
-
-
+  kanban = new KanbanBoard();
+  // Делаем kanban глобальной для простоты (опционально)
+  window.kanban = kanban;
+});
