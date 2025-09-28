@@ -1,6 +1,7 @@
 // firebase-service.js
 class FirebaseService {
     constructor() {
+        this.setupGlobalHandlers();
         this.isInitialized = false;
         this.firebaseConfig = {
             apiKey: "AIzaSyAqnTZXQDuCF3QqxhOhwTRXCulDaLO_iUI",
@@ -29,6 +30,17 @@ class FirebaseService {
         } catch (error) {
             console.error('❌ Firebase initialization failed:', error);
         }
+    }
+
+    setupGlobalHandlers() {
+        // Вешаем обработчики на document
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('[data-action="edit-column"]')) {
+                const status = e.target.closest('button').dataset.status;
+                this.openEditColumnModal(status, '');
+            }
+            // ... другие обработчики
+        });
     }
 
     loadFirebaseSDK() {
