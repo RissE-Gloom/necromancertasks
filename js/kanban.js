@@ -20,9 +20,21 @@ class KanbanBoard {
     this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
+    this.setupGlobalHandlers();
 
     // this.init()
   }
+
+setupGlobalHandlers() {
+        // Вешаем обработчики на document
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('[data-action="edit-column"]')) {
+                const status = e.target.closest('button').dataset.status;
+                this.openEditColumnModal(status, '');
+            }
+            // ... другие обработчики
+        });
+    }
 
 async initFirebase() {
     try {
