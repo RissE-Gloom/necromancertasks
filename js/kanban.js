@@ -26,33 +26,37 @@ class KanbanBoard {
 
 async initFirebase() {
     try {
-      // Ждем инициализации Firebase
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (this.firebase.isInitialized) {
-        // Загружаем данные из Firebase
-        this.tasks = await this.firebase.loadTasks();
-        this.columns = await this.firebase.loadColumns();
-        this.isOnline = true;
+        // Ждем инициализации Firebase
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Настраиваем реальное время синхронизацию
-        this.firebase.setupRealtimeSync((tasks, columns) => {
-          console.log('🔄 Real-time update from Firebase');
-          this.tasks = Object.values(tasks || {});
-          this.columns = Object.values(columns || {});
-          this.render();
-        });
-        
-        console.log('✅ Using Firebase for data storage');
-      } else {
-        throw new Error('Firebase not initialized');
-      }
+        if (this.firebase.isInitialized) {
+            console.log('🔄 Starting Firebase sync...');
+            
+            // Используем manualSync для первоначальной загрузки
+            const syncResult = await this.firebase.manualSync();
+            if (syncResult) {
+                this.tasks = syncResult.tasks;
+                this.columns = syncResult.columns;
+                this.isOnline = true;
+                console.log('✅ Firebase data loaded');
+            }
+            
+            // Настраиваем реальное время синхронизацию
+            this.firebase.setupRealtimeSync((tasks, columns) => {
+                console.log('🔄 Real-time update from Firebase');
+                this.tasks = Object.values(tasks || {});
+                this.columns = Object.values(columns || {});
+                this.render();
+            });
+            
+        } else {
+            throw new Error('Firebase not initialized');
+        }
     } catch (error) {
-      console.log('⚠️ Using localStorage as fallback');
-      // Fallback на localStorage
-      this.tasks = this.loadTasks();
-      this.columns = this.loadColumns();
-      this.isOnline = false;
+        console.log('⚠️ Using localStorage as fallback');
+        this.tasks = this.loadTasks();
+        this.columns = this.loadColumns();
+        this.isOnline = false;
     }
 
     // Инициализация приложения после загрузки данных
