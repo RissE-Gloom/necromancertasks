@@ -157,15 +157,49 @@ class FirebaseService {
         }
     }
 
+    async manualSync() {
+        if (!this.isInitialized) return;
+        
+        console.log('🔄 Manual sync started');
+        this.isSyncing = true;
+        
+        try {
+            // Загружаем свежие данные из Firebase
+            const [tasks, columns] = await Promise.all([
+                this.loadTasks(),
+                this.loadColumns()
+            ]);
+            
+            console.log('✅ Manual sync completed');
+            return { tasks, columns };
+            
+        } catch (error) {
+            console.error('❌ Manual sync failed:', error);
+            return null;
+        } finally {
+            this.isSyncing = false;
+        }
+    }
+    
     // Реaltime синхронизация
     setupRealtimeSync(onDataChange) {
         if (!this.isInitialized) return;
 
+        //флаг чтобы избежать циклических обновлений
+        this.isSyncing = false;
+
         this.db.ref('projects/default').on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data && onDataChange) {
-                onDataChange(data.tasks || {}, data.columns || {});
-            }
+             // Игнорируем синхронизацию если это ответ на наш же запрос
+        if (this.isSyncing) {
+            this.isSyncing = false;
+            return;
+        }
+        
+        const data = snapshot.val();
+        if (data && onDataChange) {
+            console.log('🔄 Firebase realtime update received');
+            onDataChange(data.tasks || {}, data.columns || {});
+        }
         });
     }
 }
