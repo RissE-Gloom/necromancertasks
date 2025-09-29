@@ -841,17 +841,25 @@ handleEditTask(e) {
 }
 
   updateTaskStatus(taskId, newStatus) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task) return
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
 
-    const oldStatus = task.status
-    task.status = newStatus
-    this.saveTasks()
-    this.render()
+    const oldStatus = task.status;
+    task.status = newStatus;
+    
+    // Если задача перемещена в колонку "готово" - запоминаем дату
+    const doneStatuses = ["done", "готово", "completed", "finished"];
+    if (doneStatuses.includes(newStatus) && !doneStatuses.includes(oldStatus)) {
+        task.movedToDoneAt = new Date().toISOString();
+        console.log(`📅 Task ${task.title} moved to done at: ${task.movedToDoneAt}`);
+    }
+    
+    this.saveTasks();
+    this.render();
 
     // Отправляем уведомление о перемещении
     if (oldStatus !== newStatus) {
-        this.trackTaskMovement(taskId, oldStatus, newStatus)
+        this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
 }
 
@@ -874,28 +882,36 @@ handleEditTask(e) {
   }
 
   checkAndRemoveOldTasks() {
-    const now = new Date()
-    const threeDaysAgo = new Date(now)
-    threeDaysAgo.setDate(now.getDate() - 3)
+    const now = new Date();
+    const threeDaysAgo = new Date(now);
+    threeDaysAgo.setDate(now.getDate() - 3);
 
-    let tasksRemoved = false
+    let tasksRemoved = false;
+    const doneStatuses = ["done", "готово", "completed", "finished"];
 
     this.tasks = this.tasks.filter(task => {
-        if (task.status === "done") { // 👈 если статус "done" — проверяем дату
-            const createdAt = new Date(task.createdAt)
-            if (createdAt < threeDaysAgo) {
-                tasksRemoved = true
-                return false // удаляем задачу
+        if (doneStatuses.includes(task.status)) {
+            // Используем дату перемещения в "готово" или дату создания
+            const relevantDate = task.movedToDoneAt ? 
+                new Date(task.movedToDoneAt) : 
+                new Date(task.createdAt);
+            
+            if (relevantDate < threeDaysAgo) {
+                console.log(`🗑️ Removing task: "${task.title}" (in done since: ${relevantDate.toLocaleDateString()})`);
+                tasksRemoved = true;
+                return false;
             }
         }
-        return true // оставляем задачу
-    })
+        return true;
+    });
 
     if (tasksRemoved) {
-        this.saveTasks()
-        this.render()
+        this.saveTasks();
+        this.render();
+        console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
     }
 }
+
 }
 
 // Initialize the application
