@@ -2,6 +2,7 @@
 class FirebaseService {
     constructor() {
         this.isInitialized = false;
+        this.isSyncing = false; 
         this.firebaseConfig = {
             apiKey: "AIzaSyAqnTZXQDuCF3QqxhOhwTRXCulDaLO_iUI",
             authDomain: "berloga-lisy.firebaseapp.com",
@@ -16,6 +17,8 @@ class FirebaseService {
 
     async init() {
         try {
+            await this.loadFirebaseSDK();
+            
             // Проверяем, загружен ли Firebase
             if (typeof firebase === 'undefined') {
                 console.error('Firebase not loaded');
@@ -49,13 +52,16 @@ class FirebaseService {
                 return;
             }
 
-            // Загружаем Firebase SDK динамически
+            console.log('🔄 Loading Firebase SDK...');
             const script = document.createElement('script');
-            script.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+            script.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js'; //compat версия
             script.onload = () => {
                 const scriptDatabase = document.createElement('script');
-                scriptDatabase.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js';
-                scriptDatabase.onload = resolve;
+                scriptDatabase.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js'; //и здесь compat
+                scriptDatabase.onload = () => {
+                    console.log('✅ Firebase SDK loaded');
+                    resolve();
+                };
                 scriptDatabase.onerror = reject;
                 document.head.appendChild(scriptDatabase);
             };
