@@ -703,45 +703,45 @@ handleEditTask(e) {
   }
 
   // Новый метод для привязки динамических обработчиков
-  setupDynamicEventListeners() {
-    // Обработчики для кнопок колонок
-    document.querySelectorAll('.edit-column-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const status = e.target.closest('.edit-column-btn').dataset.status;
-        const title = e.target.closest('.edit-column-btn').dataset.title;
-        this.openEditColumnModal(status, title);
-      });
-    });
+  // setupDynamicEventListeners() {
+  //   // Обработчики для кнопок колонок
+  //   document.querySelectorAll('.edit-column-btn').forEach(btn => {
+  //     btn.addEventListener('click', (e) => {
+  //       const status = e.target.closest('.edit-column-btn').dataset.status;
+  //       const title = e.target.closest('.edit-column-btn').dataset.title;
+  //       this.openEditColumnModal(status, title);
+  //     });
+  //   });
 
-    document.querySelectorAll('.delete-column-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const status = e.target.closest('.delete-column-btn').dataset.status;
-        this.deleteColumn(status);
-      });
-    });
+  //   document.querySelectorAll('.delete-column-btn').forEach(btn => {
+  //     btn.addEventListener('click', (e) => {
+  //       const status = e.target.closest('.delete-column-btn').dataset.status;
+  //       this.deleteColumn(status);
+  //     });
+  //   });
 
-    // Обработчики для кнопок задач (делегирование событий)
-    document.addEventListener('click', (e) => {
-      // Редактирование задачи
-      if (e.target.closest('.edit-task-btn')) {
-        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
-        this.openEditTaskModal(taskId);
-      }
+  //   // Обработчики для кнопок задач (делегирование событий)
+  //   document.addEventListener('click', (e) => {
+  //     // Редактирование задачи
+  //     if (e.target.closest('.edit-task-btn')) {
+  //       const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+  //       this.openEditTaskModal(taskId);
+  //     }
       
-      // Удаление задачи
-      if (e.target.closest('.delete-task-btn')) {
-        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
-        this.deleteTask(taskId);
-      }
+  //     // Удаление задачи
+  //     if (e.target.closest('.delete-task-btn')) {
+  //       const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+  //       this.deleteTask(taskId);
+  //     }
       
-      // Перемещение задачи
-      if (e.target.closest('.move-task-btn')) {
-        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
-        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
-        this.updateTaskStatus(taskId, targetStatus);
-      }
-    });
-  }
+  //     // Перемещение задачи
+  //     if (e.target.closest('.move-task-btn')) {
+  //       const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+  //       const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+  //       this.updateTaskStatus(taskId, targetStatus);
+  //     }
+  //   });
+  // }
 
   setupDragAndDrop() {
     // Привязываем контекст ко всем обработчикам
