@@ -74,8 +74,23 @@ async initFirebase() {
 }
 
 setupWebSocket() {
+    // Защита от множественных подключений
+    if (this.ws) {
+        if (this.ws.readyState === WebSocket.OPEN) {
+            console.log('⚠️ WebSocket already connected, skipping...');
+            return;
+        }
+        if (this.ws.readyState === WebSocket.CONNECTING) {
+            console.log('⚠️ WebSocket already connecting, skipping...');
+            return;
+        }
+        // Если соединение закрыто или в состоянии закрытия, продолжаем создание нового
+        console.log('🔌 WebSocket exists but not connected, creating new connection...');
+    }
+    
     try {
         const wsUrl = 'wss://kanban-bot-pr1v.onrender.com/ws';
+        console.log('🔗 Creating WebSocket connection...');
         
         this.ws = new WebSocket(wsUrl);
         
@@ -103,7 +118,7 @@ setupWebSocket() {
     } catch (error) {
         console.error('WebSocket setup error:', error);
     }
- }
+}
 
 attemptReconnect() {
     if (this.retryCount < this.maxRetries) {
