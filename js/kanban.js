@@ -17,7 +17,7 @@ class KanbanBoard {
     this.draggedTask = null
     this.draggedElement = null
     this.ws = null;
-    this.setupWebSocket();
+    // this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
 
