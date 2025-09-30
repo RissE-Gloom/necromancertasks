@@ -623,7 +623,7 @@ handleEditTask(e) {
     })
     
     // Привязываем обработчики событий после рендера
-    this.setupDynamicEventListeners();
+    // this.setupDynamicEventListeners();
 
     console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
 }
