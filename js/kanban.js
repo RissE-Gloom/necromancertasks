@@ -920,8 +920,18 @@ handleEditTask(e) {
 
 // Initialize the application
 let kanban;
+let initializationCount = 0;
+
 document.addEventListener("DOMContentLoaded", () => {
-  kanban = new KanbanBoard();
-  // Делаем kanban глобальной для простоты (опционально)
-  window.kanban = kanban;
+    initializationCount++;
+    console.log(`🏗️ DOMContentLoaded #${initializationCount}, creating KanbanBoard...`);
+    
+    if (window.kanban) {
+        console.log('⚠️ WARNING: kanban already exists in window!');
+    }
+    
+    kanban = new KanbanBoard();
+    window.kanban = kanban;
+    
+    console.log('✅ KanbanBoard created');
 });
