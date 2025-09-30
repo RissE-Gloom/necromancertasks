@@ -16,7 +16,7 @@ body {
   color: #1e293b;
   line-height: 1.6;
   font-size: 14px;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 body.modal-open {
@@ -24,7 +24,7 @@ body.modal-open {
 }
 
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -99,7 +99,7 @@ body.modal-open {
 .kanban-container {
   flex: 1;
   padding: 3rem 1rem;
-  overflow-x: auto;
+  overflow: auto;
 }
 
 @media (max-width: 768px) {
