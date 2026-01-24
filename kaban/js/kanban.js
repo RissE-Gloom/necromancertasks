@@ -8,33 +8,30 @@ class KanbanBoard {
     this.isOnline = false;
 
     // Загружаем данные асинхронно
+    this.#listenersAttached = false;
+
+    // Инициализируем Firebase в фоне
     this.initFirebase();
 
-    this.tasks = this.loadTasks()
-    this.columns = this.loadColumns()
-    this.expandedTasks = new Set()
-    this.labels = this.loadLabels()
-    this.currentEditingColumn = null
-    this.lucide = window.lucide
-    this.draggedTask = null
-    this.draggedElement = null
-    this.ws = null;
-    this.retryCount = 0;
-    this.maxRetries = 5;
-    this.#listenersAttached = false; // Флаг для предотвращения дублирования
-
-    // Сразу отрисовываем то, что есть в localStorage
-    setTimeout(() => {
-      this.render();
-    }, 50);
+    // Сразу привязываем события и рисуем (из localStorage)
+    this.setupEventListeners();
+    this.setupDragAndDrop();
+    this.render();
   }
 
   #listenersAttached = false;
 
   async initFirebase() {
     try {
-      // Ждем инициализации Firebase
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Ждем инициализации SDK (коротко)
+      await new Promise(resolve => {
+        let attempts = 0;
+        const check = () => {
+          if (this.firebase.isInitialized || attempts > 50) resolve();
+          else { attempts++; setTimeout(check, 100); }
+        };
+        check();
+      });
 
       if (this.firebase.isInitialized) {
         console.log('🔄 Starting Firebase sync...');
@@ -72,11 +69,8 @@ class KanbanBoard {
       this.isOnline = false;
     }
 
-    // Полная инициализация
+    // Настраиваем вебсокет для бота
     this.setupWebSocket();
-    this.setupEventListeners();
-    this.setupDragAndDrop();
-    this.render();
   }
 
   setupWebSocket() {
@@ -514,57 +508,68 @@ class KanbanBoard {
       this.handleEditTask(e)
     })
 
-    // Manage Labels Events
-    document.getElementById("manage-labels-btn").addEventListener("click", () => {
-      this.renderLabels();
-      this.openModal("labels-modal");
-    });
-
-    document.getElementById("close-labels-modal").addEventListener("click", () => this.closeModal("labels-modal"));
-    document.getElementById("close-labels-btn").addEventListener("click", () => this.closeModal("labels-modal"));
-
-    document.getElementById("add-label-btn").addEventListener("click", () => {
-      const input = document.getElementById("new-label-name");
-      const name = input.value.trim();
-      if (name && !this.labels.includes(name)) {
-        this.labels.push(name);
-        input.value = "";
-        this.saveLabels();
-        this.renderLabels();
-      }
-    });
-
     // Add Column Modal
-    document.getElementById("add-column-btn").addEventListener("click", () => {
-      this.openAddColumnModal()
-    })
+    const addColumnBtn = document.getElementById("add-column-btn");
+    if (addColumnBtn) addColumnBtn.addEventListener("click", () => this.openAddColumnModal());
 
-    document.getElementById("close-column-modal").addEventListener("click", () => {
-      this.closeModal("add-column-modal")
-    })
+    const closeColumnBtn = document.getElementById("close-column-modal");
+    if (closeColumnBtn) closeColumnBtn.addEventListener("click", () => this.closeModal("add-column-modal"));
 
-    document.getElementById("cancel-column").addEventListener("click", () => {
-      this.closeModal("add-column-modal")
-    })
+    const cancelColumnBtn = document.getElementById("cancel-column");
+    if (cancelColumnBtn) cancelColumnBtn.addEventListener("click", () => this.closeModal("add-column-modal"));
 
-    document.getElementById("add-column-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleAddColumn(e)
-    })
+    const addColumnForm = document.getElementById("add-column-form");
+    if (addColumnForm) {
+      addColumnForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleAddColumn(e);
+      });
+    }
 
     // Edit Column Modal
-    document.getElementById("close-edit-column-modal").addEventListener("click", () => {
-      this.closeModal("edit-column-modal")
-    })
+    const closeEditColumnBtn = document.getElementById("close-edit-column-modal");
+    if (closeEditColumnBtn) closeEditColumnBtn.addEventListener("click", () => this.closeModal("edit-column-modal"));
 
-    document.getElementById("cancel-edit-column").addEventListener("click", () => {
-      this.closeModal("edit-column-modal")
-    })
+    const cancelEditColumnBtn = document.getElementById("cancel-edit-column");
+    if (cancelEditColumnBtn) cancelEditColumnBtn.addEventListener("click", () => this.closeModal("edit-column-modal"));
 
-    document.getElementById("edit-column-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleEditColumn(e)
-    })
+    const editColumnForm = document.getElementById("edit-column-form");
+    if (editColumnForm) {
+      editColumnForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        this.handleEditColumn(e);
+      });
+    }
+
+    // Manage Labels Modal
+    const manageLabelsBtn = document.getElementById("manage-labels-btn");
+    if (manageLabelsBtn) {
+      manageLabelsBtn.addEventListener("click", () => {
+        this.renderLabels();
+        this.openModal("labels-modal");
+      });
+    }
+
+    const closeLabelsBtn1 = document.getElementById("close-labels-modal");
+    if (closeLabelsBtn1) closeLabelsBtn1.addEventListener("click", () => this.closeModal("labels-modal"));
+
+    const closeLabelsBtn2 = document.getElementById("close-labels-btn");
+    if (closeLabelsBtn2) closeLabelsBtn2.addEventListener("click", () => this.closeModal("labels-modal"));
+
+    const addLabelBtn = document.getElementById("add-label-btn");
+    if (addLabelBtn) {
+      addLabelBtn.addEventListener("click", () => {
+        const input = document.getElementById("new-label-name");
+        if (!input) return;
+        const name = input.value.trim();
+        if (name && !this.labels.includes(name)) {
+          this.labels.push(name);
+          input.value = "";
+          this.saveLabels();
+          this.renderLabels();
+        }
+      });
+    }
 
     document.addEventListener("click", (e) => {
       // Handle dropdown toggles
