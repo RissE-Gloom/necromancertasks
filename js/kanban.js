@@ -282,9 +282,9 @@ class KanbanBoard {
     const list = document.getElementById("labels-list");
     if (!list) return; // Guard clause
     list.innerHTML = this.labels.map((label, index) => `
-        <div class="label-item">
-            <span>${label}</span>
-            <button class="btn-icon delete-label-btn" data-index="${index}">
+        <div class="label-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); margin-bottom: 0.5rem; border-radius: 8px;">
+            <span style="color: white; font-weight: 500;">${label}</span>
+            <button class="btn-icon delete-label-btn" data-index="${index}" style="color: #ef4444;">
                 <i data-lucide="trash-2"></i>
             </button>
         </div>
@@ -556,6 +556,22 @@ class KanbanBoard {
         this.renderLabels();
         this.openModal("labels-modal");
       });
+    }
+
+    const addLabelBtn = document.getElementById("add-label-btn");
+    if (addLabelBtn) {
+      addLabelBtn.onclick = () => {
+        const input = document.getElementById("new-label-name");
+        if (input && input.value.trim()) {
+          const newLabel = input.value.trim();
+          if (!this.labels.includes(newLabel)) {
+            this.labels.push(newLabel);
+            input.value = "";
+            this.saveLabels();
+            this.renderLabels();
+          }
+        }
+      };
     }
   }
 

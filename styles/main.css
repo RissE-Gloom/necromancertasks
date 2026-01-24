@@ -9,9 +9,12 @@ body {
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   background-color: #f8fafc;
   background-image: url('../public/419.jpg');
-  background-size: cover;      /* 🔑 растягивает изображение с сохранением пропорций, заполняя весь блок */
-  background-position: center; /* 🔑 центрирует изображение */
-  background-repeat: no-repeat; /* 🔑 отключает повторение */
+  background-size: cover;
+  /* 🔑 растягивает изображение с сохранением пропорций, заполняя весь блок */
+  background-position: center;
+  /* 🔑 центрирует изображение */
+  background-repeat: no-repeat;
+  /* 🔑 отключает повторение */
   background-attachment: fixed;
   color: #1e293b;
   line-height: 1.6;
@@ -77,23 +80,24 @@ body.modal-open {
 
 /* Метка задачи */
 .task-label {
-    display: inline-block;
-    padding: 0.2em 0.6em;
-    font-size: 0.85em;
-    font-weight: 500;
-    color: #fff;
-    background: #6366f1; /* Индиго */
-    border-radius: 12px;
-    margin-left: 0.5em;
-    vertical-align: middle;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 120px;
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  font-size: 0.85em;
+  font-weight: 500;
+  color: #fff;
+  background: #6366f1;
+  /* Индиго */
+  border-radius: 12px;
+  margin-left: 0.5em;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
 }
 
 .task-label:empty {
-    display: none;
+  display: none;
 }
 
 .kanban-container {
@@ -473,6 +477,8 @@ body.modal-open {
   overflow-y: auto;
   transform: scale(0.9);
   transition: transform 0.3s ease;
+  color: #ffffff;
+  /* 👈 Fix for dark text on dark background */
 }
 
 .modal.active .modal-content {
@@ -601,6 +607,7 @@ select {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -611,12 +618,14 @@ select {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
 }
 
 @media print {
+
   .header-actions,
   .column-actions,
   .task-actions,
