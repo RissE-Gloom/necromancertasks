@@ -349,6 +349,66 @@ body.modal-open {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
 
+/* Modern Premium Label Chips */
+.labels-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  min-height: 50px;
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  border-radius: 50px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  cursor: default;
+}
+
+.label-chip:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.label-chip .delete-label-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  border: none;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.label-chip .delete-label-btn:hover {
+  background: #ef4444;
+  color: white;
+  transform: rotate(90deg);
+}
+
+.label-chip .delete-label-btn i {
+  width: 12px;
+  height: 12px;
+}
+
 .btn.btn-outline {
   background: transparent;
   color: #ffffff;
