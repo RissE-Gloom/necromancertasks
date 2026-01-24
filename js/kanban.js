@@ -7,41 +7,27 @@ class KanbanBoard {
     this.firebase = new FirebaseService();
     this.isOnline = false;
 
-    // Данные и состояние
+    // Загружаем данные асинхронно
+    this.initFirebase();  // ← вызов асинхронной инициализации
+
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
-    this.expandedTasks = new Set()
-    this.labels = this.loadLabels()
     this.currentEditingColumn = null
-    this.lucide = window.lucide
+    this.lucide = window.lucide // Declare the lucide variable
     this.draggedTask = null
     this.draggedElement = null
     this.ws = null;
+    // this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
-    this.#listenersAttached = false;
 
-    // Инициализируем Firebase в фоне
-    this.initFirebase();
-
-    // Сразу привязываем события и рисуем (из localStorage)
-    this.setupEventListeners();
-    this.setupDragAndDrop();
-    this.render();
+    // this.init()
   }
-
 
   async initFirebase() {
     try {
-      // Ждем инициализации SDK (коротко)
-      await new Promise(resolve => {
-        let attempts = 0;
-        const check = () => {
-          if (this.firebase.isInitialized || attempts > 50) resolve();
-          else { attempts++; setTimeout(check, 100); }
-        };
-        check();
-      });
+      // Ждем инициализации Firebase
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       if (this.firebase.isInitialized) {
         console.log('🔄 Starting Firebase sync...');
@@ -57,38 +43,54 @@ class KanbanBoard {
 
         // Настраиваем реальное время синхронизацию
         this.firebase.setupRealtimeSync((tasks, columns) => {
-          console.log('🔄 Update from Firebase');
-          const serverTasks = Object.values(tasks || {});
-          const serverColumns = Object.values(columns || {});
-
-          // Обновляем только если на сервере что-то есть
-          if (serverColumns.length > 0) {
-            this.tasks = serverTasks;
-            this.columns = serverColumns;
-            this.render();
-          }
+          console.log('🔄 Real-time update from Firebase');
+          this.tasks = Object.values(tasks || {});
+          this.columns = Object.values(columns || {});
+          this.render();
         });
 
       } else {
         throw new Error('Firebase not initialized');
       }
     } catch (error) {
-      console.log('⚠️ Using localStorage as fallback:', error);
+      console.log('⚠️ Using localStorage as fallback');
       this.tasks = this.loadTasks();
       this.columns = this.loadColumns();
       this.isOnline = false;
     }
 
-    // Настраиваем вебсокет для бота
+    // Инициализация приложения после загрузки данных
     this.setupWebSocket();
+    this.setupEventListeners();
+    this.setupDragAndDrop();
+    this.checkAndRemoveOldTasks();
+    this.render();
+    this.lucide.createIcons();
+
+    // Интервал для проверки старых задач
+    setInterval(() => {
+      this.checkAndRemoveOldTasks();
+    }, 300000);
   }
 
   setupWebSocket() {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+    // Защита от множественных подключений
+    if (this.ws) {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        console.log('⚠️ WebSocket already connected, skipping...');
+        return;
+      }
+      if (this.ws.readyState === WebSocket.CONNECTING) {
+        console.log('⚠️ WebSocket already connecting, skipping...');
+        return;
+      }
+      // Если соединение закрыто или в состоянии закрытия, продолжаем создание нового
+      console.log('🔌 WebSocket exists but not connected, creating new connection...');
+    }
 
     try {
-      const wsUrl = window.KANBAN_WS_URL || 'wss://kanban-bot-pr1v.onrender.com/ws';
-      console.log('🔗 Connecting to WebSocket:', wsUrl);
+      const wsUrl = 'wss://kanban-bot-pr1v.onrender.com/ws';
+      console.log('🔗 Creating WebSocket connection...');
 
       this.ws = new WebSocket(wsUrl);
 
@@ -205,7 +207,6 @@ class KanbanBoard {
             taskCount: tasks.length
           };
         }),
-        labels: this.labels, // Добавляем список меток для бота
         timestamp: new Date().toISOString()
       };
 
@@ -263,58 +264,6 @@ class KanbanBoard {
     }, 300000)
   }
 
-  // Data Management
-  loadTasks() {
-    try {
-      const saved = localStorage.getItem("kanban-tasks")
-      return saved ? JSON.parse(saved) : []
-    } catch (e) {
-      console.error('Error loading tasks:', e);
-      return [];
-    }
-  }
-
-  async saveTasks() {
-    if (this.isOnline) {
-      const success = await this.firebase.saveTasks(this.tasks);
-      if (!success) {
-        // Fallback на localStorage если Firebase недоступен
-        localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
-      }
-    } else {
-      localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
-    }
-  }
-
-  loadColumns() {
-    const saved = localStorage.getItem("kanban-columns");
-    const columns = saved ? JSON.parse(saved) : [
-      { id: "todo", title: "Этап клина", status: "todo" },
-      { id: "in-progress", title: "Этап перевода", status: "in-progress" },
-      { id: "done", title: "Этап редактуры", status: "done" },
-      { id: "backlog", title: "Бета-рид", status: "backlog" },
-      { id: "review", title: "Этап тайпа", status: "review" },
-      { id: "testing", title: "Клин (ПТ, Баст, айдол)", status: "testing" }
-    ];
-
-    return columns.map((col, index) => ({
-      ...col,
-      order: col.order !== undefined ? col.order : index
-    }));
-  }
-
-  async saveColumns() {
-    if (this.isOnline) {
-      const success = await this.firebase.saveColumns(this.columns);
-      if (!success) {
-        // Fallback на localStorage если Firebase недоступен
-        localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
-      }
-    } else {
-      localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
-    }
-  }
-
   // Label Management
   loadLabels() {
     const saved = localStorage.getItem("kanban-labels");
@@ -328,6 +277,7 @@ class KanbanBoard {
 
   renderLabels() {
     const list = document.getElementById("labels-list");
+    if (!list) return; // Guard clause
     list.innerHTML = this.labels.map((label, index) => `
         <div class="label-item">
             <span>${label}</span>
@@ -336,7 +286,7 @@ class KanbanBoard {
             </button>
         </div>
     `).join("");
-    this.lucide.createIcons();
+    if (this.lucide) this.lucide.createIcons();
 
     list.querySelectorAll('.delete-label-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -358,6 +308,51 @@ class KanbanBoard {
         this.labels.map(l => `<option value="${l}">${l}</option>`).join("");
       select.value = currentValue;
     });
+  }
+
+  // Data Management
+  loadTasks() {
+    const saved = localStorage.getItem("kanban-tasks")
+    return saved ? JSON.parse(saved) : []
+  }
+
+  async saveTasks() {
+    if (this.isOnline) {
+      const success = await this.firebase.saveTasks(this.tasks);
+      if (!success) {
+        // Fallback на localStorage если Firebase недоступен
+        localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+      }
+    } else {
+      localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+    }
+  }
+
+  loadColumns() {
+    const saved = localStorage.getItem("kanban-columns")
+    return saved
+      ? JSON.parse(saved)
+      : [
+        { id: "todo", title: "To Do", status: "todo" },
+        { id: "in-progress", title: "In Progress", status: "in-progress" },
+        { id: "done", title: "Done", status: "done" },
+      ]
+    return columns.map((col, index) => ({
+      ...col,
+      order: col.order !== undefined ? col.order : index
+    }));
+  }
+
+  async saveColumns() {
+    if (this.isOnline) {
+      const success = await this.firebase.saveColumns(this.columns);
+      if (!success) {
+        // Fallback на localStorage если Firebase недоступен
+        localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+      }
+    } else {
+      localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+    }
   }
 
   // Task Management
@@ -393,31 +388,13 @@ class KanbanBoard {
   }
 
   async deleteTask(taskId) {
-    if (!confirm("Вы уверены, что хотите удалить эту задачу?")) return;
-
-    const deleteRecursive = (id) => {
-      const subtasks = this.tasks.filter(t => t.parentId === id);
-      subtasks.forEach(st => deleteRecursive(st.id));
-      this.tasks = this.tasks.filter(t => t.id !== id);
-    };
-
-    deleteRecursive(taskId);
+    this.tasks = this.tasks.filter((t) => t.id !== taskId);
     await this.saveTasks();
     this.render();
   }
 
   getTasksByStatus(status) {
-    // Возвращаем только корневые задачи для колонки
-    return this.tasks.filter((task) => task.status === status && !task.parentId);
-  }
-
-  toggleTaskExpand(taskId) {
-    if (this.expandedTasks.has(taskId)) {
-      this.expandedTasks.delete(taskId);
-    } else {
-      this.expandedTasks.add(taskId);
-    }
-    this.render();
+    return this.tasks.filter((task) => task.status === status)
   }
 
   // Column Management
@@ -471,90 +448,94 @@ class KanbanBoard {
 
   // Event Listeners
   setupEventListeners() {
-    if (this.#listenersAttached) return;
+    // Add Task Modal
+    document.getElementById("add-task-btn").addEventListener("click", () => {
+      this.openAddTaskModal()
+    })
 
-    // --- Глобальное делегирование кликов ---
+    document.getElementById("close-task-modal").addEventListener("click", () => {
+      this.closeModal("add-task-modal")
+    })
+
+    document.getElementById("cancel-task").addEventListener("click", () => {
+      this.closeModal("add-task-modal")
+    })
+
+    document.getElementById("add-task-form").addEventListener("submit", (e) => {
+      e.preventDefault()
+      this.handleAddTask(e)
+    })
+
+    // Edit Task Modal
+    document.getElementById("close-edit-task-modal").addEventListener("click", () => {
+      this.closeModal("edit-task-modal")
+    })
+
+    document.getElementById("cancel-edit-task").addEventListener("click", () => {
+      this.closeModal("edit-task-modal")
+    })
+
+    document.getElementById("edit-task-form").addEventListener("submit", (e) => {
+      e.preventDefault()
+      this.handleEditTask(e)
+    })
+
+    // Add Column Modal
+    document.getElementById("add-column-btn").addEventListener("click", () => {
+      this.openAddColumnModal()
+    })
+
+    document.getElementById("close-column-modal").addEventListener("click", () => {
+      this.closeModal("add-column-modal")
+    })
+
+    document.getElementById("cancel-column").addEventListener("click", () => {
+      this.closeModal("add-column-modal")
+    })
+
+    document.getElementById("add-column-form").addEventListener("submit", (e) => {
+      e.preventDefault()
+      this.handleAddColumn(e)
+    })
+
+    // Edit Column Modal
+    document.getElementById("close-edit-column-modal").addEventListener("click", () => {
+      this.closeModal("edit-column-modal")
+    })
+
+    document.getElementById("cancel-edit-column").addEventListener("click", () => {
+      this.closeModal("edit-column-modal")
+    })
+
+    document.getElementById("edit-column-form").addEventListener("submit", (e) => {
+      e.preventDefault()
+      this.handleEditColumn(e)
+    })
+
     document.addEventListener("click", (e) => {
-      const target = e.target;
+      // Handle dropdown toggles
+      if (e.target.closest(".dropdown-toggle")) {
+        e.preventDefault()
+        const dropdown = e.target.closest(".dropdown")
+        const isOpen = dropdown.classList.contains("open")
 
-      // 1. Статические кнопки (Header)
-      if (target.closest("#add-task-btn")) this.openAddTaskModal();
-      if (target.closest("#add-column-btn")) this.openAddColumnModal();
-      if (target.closest("#manage-labels-btn")) { this.renderLabels(); this.openModal("labels-modal"); }
+        // Close all dropdowns
+        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
 
-      // 2. Модалки (Закрытие)
-      if (target.closest(".modal-close") || target.closest(".btn-outline#cancel-task") ||
-        target.closest(".btn-outline#cancel-edit-task") || target.closest(".btn-outline#cancel-column") ||
-        target.closest(".btn-outline#cancel-edit-column") || target.closest("#close-labels-btn")) {
-        const modal = target.closest(".modal");
-        if (modal) this.closeModal(modal.id);
-      }
-      if (target.classList.contains("modal")) this.closeModal(target.id);
-
-      // 3. Динамические кнопки колонок
-      const editColBtn = target.closest('.edit-column-btn');
-      if (editColBtn) this.openEditColumnModal(editColBtn.dataset.status, editColBtn.dataset.title);
-
-      const delColBtn = target.closest('.delete-column-btn');
-      if (delColBtn) this.deleteColumn(delColBtn.dataset.status);
-
-      // 4. Динамические кнопки задач
-      const editTaskBtn = target.closest('.edit-task-btn');
-      if (editTaskBtn) this.openEditTaskModal(editTaskBtn.dataset.taskId);
-
-      const delTaskBtn = target.closest('.delete-task-btn');
-      if (delTaskBtn) this.deleteTask(delTaskBtn.dataset.taskId);
-
-      const moveTaskBtn = target.closest('.move-task-btn');
-      if (moveTaskBtn) this.updateTaskStatus(moveTaskBtn.dataset.taskId, moveTaskBtn.dataset.targetStatus);
-
-      const expandToggle = target.closest('.expand-toggle');
-      if (expandToggle) this.toggleTaskExpand(expandToggle.dataset.taskId);
-
-      // 5. Клик по фону колонки (быстрое добавление)
-      const columnContent = target.closest('.column-content');
-      if (columnContent && target === columnContent) {
-        const select = document.getElementById("task-status");
-        if (select) select.value = columnContent.dataset.status;
-        this.openAddTaskModal();
-      }
-
-      // 6. Dropdowns
-      if (target.closest(".dropdown-toggle")) {
-        e.preventDefault();
-        const dropdown = target.closest(".dropdown");
-        const wasOpen = dropdown.classList.contains("open");
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"));
-        if (!wasOpen) dropdown.classList.add("open");
-      } else if (!target.closest(".dropdown")) {
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"));
-      }
-    });
-
-    // --- Сабмиты форм ---
-    document.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (e.target.id === "add-task-form") this.handleAddTask(e);
-      if (e.target.id === "edit-task-form") this.handleEditTask(e);
-      if (e.target.id === "add-column-form") this.handleAddColumn(e);
-      if (e.target.id === "edit-column-form") this.handleEditColumn(e);
-    });
-
-    // --- Вспомогательные кнопки в модалках ---
-    const addLabelBtn = document.getElementById("add-label-btn");
-    if (addLabelBtn) {
-      addLabelBtn.onclick = () => {
-        const input = document.getElementById("new-label-name");
-        if (input && input.value.trim() && !this.labels.includes(input.value.trim())) {
-          this.labels.push(input.value.trim());
-          input.value = "";
-          this.saveLabels();
-          this.renderLabels();
+        // Toggle current dropdown
+        if (!isOpen) {
+          dropdown.classList.add("open")
         }
-      };
-    }
+      } else if (!e.target.closest(".dropdown")) {
+        // Close all dropdowns when clicking outside
+        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
+      }
 
-    this.#listenersAttached = true;
+      // Close modals when clicking outside
+      if (e.target.classList.contains("modal")) {
+        this.closeModal(e.target.id)
+      }
+    })
   }
 
   // Modal Management
@@ -573,21 +554,6 @@ class KanbanBoard {
     this.openModal("edit-column-modal")
   }
 
-  setupColumnClickHandlers() {
-    document.querySelectorAll('.column-content').forEach(column => {
-      column.addEventListener('click', (e) => {
-        // Если кликнули именно по фону колонки, а не по карточке
-        if (e.target === column) {
-          const status = column.dataset.status;
-          const select = document.getElementById("task-status");
-          select.value = status;
-          this.openAddTaskModal();
-        }
-      });
-    });
-  }
-
-  // Modal Management
   openModal(modalId) {
     document.getElementById(modalId).classList.add("active")
     document.body.classList.add("modal-open")
@@ -614,8 +580,6 @@ class KanbanBoard {
       option.textContent = column.title
       select.appendChild(option)
     })
-
-    this.updateLabelSelects();
   }
 
   // Form Handlers
@@ -643,9 +607,6 @@ class KanbanBoard {
     document.getElementById("edit-task-priority").value = task.priority
     document.getElementById("edit-task-status").value = task.status
 
-    this.updateLabelSelects();
-    document.getElementById("edit-task-label").value = task.label || "";
-
     this.populateEditStatusOptions()
     this.openModal("edit-task-modal")
   }
@@ -669,8 +630,7 @@ class KanbanBoard {
       title: formData.get("title"),
       description: formData.get("description"),
       priority: formData.get("priority"),
-      status: formData.get("status"),
-      label: formData.get("label") || ""
+      status: formData.get("status")
     }
 
     const taskIndex = this.tasks.findIndex(t => t.id === taskId)
@@ -705,7 +665,6 @@ class KanbanBoard {
   // Rendering
   render() {
     this.renderColumns()
-    this.updateLabelSelects() // Синхронизируем выпадающие списки меток
     this.lucide.createIcons() // Use the declared lucide variable
   }
 
@@ -725,7 +684,10 @@ class KanbanBoard {
       wrapper.appendChild(columnElement)
     })
 
-    console.log('Columns rendered');
+    // Привязываем обработчики событий после рендера
+    this.setupDynamicEventListeners();
+
+    console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
   }
 
   createColumnElement(column) {
@@ -759,19 +721,11 @@ class KanbanBoard {
   }
 
   createTaskElement(task) {
-    const priorityClass = `priority-${task.priority}`;
-    const subtasks = this.tasks.filter(t => t.parentId === task.id);
-    const isExpanded = this.expandedTasks.has(task.id);
-    const hasSubtasks = subtasks.length > 0;
+    const priorityClass = `priority-${task.priority}`
 
     return `
-            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
-                    ${hasSubtasks ? `
-                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
-                            <i data-lucide="chevron-right"></i>
-                        </button>
-                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -806,34 +760,50 @@ class KanbanBoard {
                     <span class="task-priority priority-${task.priority}">${task.priority}</span>
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
-                ${hasSubtasks && isExpanded ? `
-                    <div class="subtasks-container">
-                        ${subtasks.map(st => this.createTaskElement(st)).join("")}
-                    </div>
-                ` : ''}
             </div>
         `
   }
 
-  createSubTaskElement(task) {
-    return `
-        <div class="task-card subtask priority-${task.priority}" data-task-id="${task.id}" draggable="true">
-            <div class="task-header">
-                <h4 class="task-title">${task.title}</h4>
-                <div class="task-actions">
-                    <button class="btn-icon delete-task-btn" data-task-id="${task.id}">
-                        <i data-lucide="trash-2"></i>
-                    </button>
-                </div>
-            </div>
-            ${task.label ? `<span class="task-label">${task.label}</span>` : ''}
-        </div>
-    `;
-  }
+  // Новый метод для привязки динамических обработчиков
+  setupDynamicEventListeners() {
+    // Обработчики для кнопок колонок
+    document.querySelectorAll('.edit-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.edit-column-btn').dataset.status;
+        const title = e.target.closest('.edit-column-btn').dataset.title;
+        this.openEditColumnModal(status, title);
+      });
+    });
 
-  // Методы больше не нужны, так как используем глобальное делегирование
-  setupColumnClickHandlers() { }
-  setupDynamicEventListeners() { }
+    document.querySelectorAll('.delete-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.delete-column-btn').dataset.status;
+        this.deleteColumn(status);
+      });
+    });
+
+    // Обработчики для кнопок задач (делегирование событий)
+    document.addEventListener('click', (e) => {
+      // Редактирование задачи
+      if (e.target.closest('.edit-task-btn')) {
+        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+        this.openEditTaskModal(taskId);
+      }
+
+      // Удаление задачи
+      if (e.target.closest('.delete-task-btn')) {
+        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+        this.deleteTask(taskId);
+      }
+
+      // Перемещение задачи
+      if (e.target.closest('.move-task-btn')) {
+        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+        this.updateTaskStatus(taskId, targetStatus);
+      }
+    });
+  }
 
   setupDragAndDrop() {
     // Привязываем контекст ко всем обработчикам
@@ -926,24 +896,17 @@ class KanbanBoard {
   }
 
   handleDrop(e) {
+    console.log('🖱️ Drop event triggered');
     const columnContent = e.target.closest(".column-content")
-    const nestTarget = e.target.closest(".drop-target-nest")
+    console.log('Column content:', columnContent);
+    console.log('Dragged task:', this.draggedTask);
 
-    if (this.draggedTask) {
-      if (nestTarget) {
-        // Вкладывание
-        const parentId = nestTarget.dataset.taskId;
-        const newStatus = nestTarget.closest('.kanban-column').dataset.status;
-        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
-        nestTarget.classList.remove('drop-target-nest');
-      } else if (columnContent) {
-        // Обычное перемещение
-        const newStatus = columnContent.dataset.status;
-        this.updateTaskStatus(this.draggedTask, newStatus, null);
-      }
+    if (columnContent && this.draggedTask) {
+      const newStatus = columnContent.dataset.status
+      console.log('New status:', newStatus);
+      this.updateTaskStatus(this.draggedTask, newStatus)
+      columnContent.classList.remove("drag-over")
     }
-
-    if (columnContent) columnContent.classList.remove("drag-over")
   }
 
   handleDragEnd(e) {
@@ -978,12 +941,13 @@ class KanbanBoard {
     const doneStatuses = ["done", "готово", "completed", "finished"];
     if (doneStatuses.includes(newStatus) && !doneStatuses.includes(oldStatus)) {
       task.movedToDoneAt = new Date().toISOString();
+      console.log(`📅 Task ${task.title} moved to done at: ${task.movedToDoneAt}`);
     }
 
     this.saveTasks();
     this.render();
 
-    // Отправляем уведомление о перемещении
+    // Отправляем уведомление, если статус или родитель изменился
     if (oldStatus !== newStatus || oldParentId !== task.parentId) {
       this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
@@ -1034,15 +998,26 @@ class KanbanBoard {
     if (tasksRemoved) {
       this.saveTasks();
       this.render();
+      console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
     }
   }
 
 }
 
-// Initialize the application 
+// Initialize the application
+let kanban;
+let initializationCount = 0;
+
 document.addEventListener("DOMContentLoaded", () => {
-  if (!window.kanban) {
-    window.kanban = new KanbanBoard();
-    console.log('✅ KanbanBoard created and attached to window');
+  initializationCount++;
+  console.log(`🏗️ DOMContentLoaded #${initializationCount}, creating KanbanBoard...`);
+
+  if (window.kanban) {
+    console.log('⚠️ WARNING: kanban already exists in window!');
   }
+
+  kanban = new KanbanBoard();
+  window.kanban = kanban;
+
+  console.log('✅ KanbanBoard created');
 });

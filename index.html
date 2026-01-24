@@ -2,7 +2,7 @@
 <html lang="en">
 <script>
     // Конфигурация WebSocket URL
-    window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com/ws';
+    window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
 
     // Или для локальной разработки:
     // window.KANBAN_WS_URL = 'ws://localhost:8080';
@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
-
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
@@ -36,10 +36,6 @@
                 <button class="btn btn-primary" id="add-task-btn">
                     <i data-lucide="plus"></i>
                     Новая карточка
-                </button>
-                <button class="btn btn-outline" id="subscribe-btn">
-                    <i data-lucide="bell"></i>
-                    Подписаться
                 </button>
             </div>
         </header>
@@ -212,39 +208,16 @@
                         </button>
                     </div>
                 </div>
-
-                <!-- Subscribe Modal -->
-                <div class="modal" id="subscribe-modal">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h2>Подписка на уведомления</h2>
-                            <button class="modal-close" id="close-subscribe-modal">
-                                <i data-lucide="x"></i>
-                            </button>
-                        </div>
-                        <div class="modal-body">
-                            <p>Перейдите в бота и нажмите Start для подключения уведомлений:</p>
-                            <div class="form-group" style="text-align: center; margin-top: 1rem;">
-                                <a href="https://t.me/NecromancerTaskBot" target="_blank" class="btn btn-primary">
-                                    <i data-lucide="send"></i>
-                                    Открыть бота
-                                </a>
-                            </div>
-                        </div>
-                        <div class="modal-actions">
-                            <button type="button" class="btn btn-outline" id="cancel-subscribe">Закрыть</button>
-                        </div>
-                    </div>
-                </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-outline" id="close-labels-btn">Закрыть</button>
                 </div>
             </div>
         </div>
     </div>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
     <script type="module" src="js/kanban.js"></script>
 </body>
 
 </html>
+<script>
+    lucide.createIcons();
+</script>

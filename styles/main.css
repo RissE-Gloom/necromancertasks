@@ -1,12 +1,4 @@
 /* Compiled CSS from SCSS - Main Styles */
-:root {
-  --primary: #6366f1;
-  --primary-rgb: 99, 102, 241;
-  --bg-secondary: #f1f5f9;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-}
-
 * {
   margin: 0;
   padding: 0;
@@ -215,13 +207,6 @@ body.modal-open {
   gap: 1rem;
   min-height: 200px;
   transition: background-color 0.2s ease;
-  padding-bottom: 100px; /* Быстрое создание по клику в пустоту */
-}
-
-.column-content.drop-target-nest {
-  background-color: rgba(99, 102, 241, 0.1);
-  border: 2px dashed var(--primary);
-  border-radius: 8px;
 }
 
 .column-content.drag-over {
@@ -605,82 +590,6 @@ textarea::placeholder {
 textarea {
   resize: vertical;
   min-height: 80px;
-}
-
-/* Subtasks and Nesting */
-.task-card.has-children {
-  border-bottom: 3px double #221831;
-}
-
-.subtasks-container {
-  margin-top: 0.75rem;
-  padding-left: 1rem;
-  border-left: 2px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.task-card.subtask {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
-  background: #eef2f6;
-}
-
-.task-card.subtask .task-title {
-  font-size: 0.8rem;
-}
-
-.expand-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
-}
-
-.expand-toggle.expanded {
-  transform: rotate(90deg);
-}
-
-/* Label Management */
-.labels-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 300px;
-  overflow-y: auto;
-  margin-bottom: 1rem;
-  padding: 0.5rem;
-  background: rgba(0,0,0,0.05);
-  border-radius: 8px;
-}
-
-.label-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem;
-  background: #fff;
-  border-radius: 6px;
-  color: #1e293b;
-}
-
-.input-with-button {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-with-button input {
-  flex: 1;
-}
-
-.drop-target-nest {
-  outline: 2px dashed var(--primary);
-  outline-offset: -4px;
 }
 
 select {
