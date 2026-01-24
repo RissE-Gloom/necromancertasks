@@ -7,7 +7,18 @@ class KanbanBoard {
     this.firebase = new FirebaseService();
     this.isOnline = false;
 
-    // Загружаем данные асинхронно
+    // Данные и состояние
+    this.tasks = this.loadTasks()
+    this.columns = this.loadColumns()
+    this.expandedTasks = new Set()
+    this.labels = this.loadLabels()
+    this.currentEditingColumn = null
+    this.lucide = window.lucide
+    this.draggedTask = null
+    this.draggedElement = null
+    this.ws = null;
+    this.retryCount = 0;
+    this.maxRetries = 5;
     this.#listenersAttached = false;
 
     // Инициализируем Firebase в фоне
