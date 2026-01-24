@@ -30,7 +30,6 @@ class KanbanBoard {
     this.render();
   }
 
-  #listenersAttached = false;
 
   async initFirebase() {
     try {
@@ -809,7 +808,7 @@ class KanbanBoard {
                 </div>
                 ${hasSubtasks && isExpanded ? `
                     <div class="subtasks-container">
-                        ${subtasks.map(st => this.createSubTaskElement(st)).join("")}
+                        ${subtasks.map(st => this.createTaskElement(st)).join("")}
                     </div>
                 ` : ''}
             </div>
