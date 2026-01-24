@@ -12,6 +12,8 @@ class KanbanBoard {
 
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
+    this.expandedTasks = new Set()
+    this.labels = this.loadLabels()
     this.currentEditingColumn = null
     this.lucide = window.lucide // Declare the lucide variable
     this.draggedTask = null
@@ -63,6 +65,7 @@ class KanbanBoard {
     this.setupWebSocket();
     this.setupEventListeners();
     this.setupDragAndDrop();
+    this.setupColumnClickHandlers();
     this.checkAndRemoveOldTasks();
     this.render();
     this.lucide.createIcons();
@@ -394,7 +397,17 @@ class KanbanBoard {
   }
 
   getTasksByStatus(status) {
-    return this.tasks.filter((task) => task.status === status)
+    // Возвращаем только корневые задачи (без родителя) для колонок
+    return this.tasks.filter((task) => task.status === status && !task.parentId)
+  }
+
+  toggleTaskExpand(taskId) {
+    if (this.expandedTasks.has(taskId)) {
+      this.expandedTasks.delete(taskId);
+    } else {
+      this.expandedTasks.add(taskId);
+    }
+    this.render();
   }
 
   // Column Management
@@ -531,11 +544,19 @@ class KanbanBoard {
         document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
       }
 
-      // Close modals when clicking outside
       if (e.target.classList.contains("modal")) {
         this.closeModal(e.target.id)
       }
     })
+
+    // Labels Management
+    const labelsBtn = document.getElementById("manage-labels-btn");
+    if (labelsBtn) {
+      labelsBtn.addEventListener("click", () => {
+        this.renderLabels();
+        this.openModal("labels-modal");
+      });
+    }
   }
 
   // Modal Management
@@ -721,11 +742,20 @@ class KanbanBoard {
   }
 
   createTaskElement(task) {
-    const priorityClass = `priority-${task.priority}`
+    const priorityClass = `priority-${task.priority}`;
+    // Фильтруем подзадачи для текущей задачи
+    const subtasks = this.tasks.filter(t => t.parentId === task.id);
+    const hasSubtasks = subtasks.length > 0;
+    const isExpanded = this.expandedTasks.has(task.id);
 
     return `
-            <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
+                    ${hasSubtasks ? `
+                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -760,6 +790,11 @@ class KanbanBoard {
                     <span class="task-priority priority-${task.priority}">${task.priority}</span>
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
+                ${isExpanded && hasSubtasks ? `
+                    <div class="subtasks-container">
+                        ${subtasks.map(st => this.createTaskElement(st)).join('')}
+                    </div>
+                ` : ''}
             </div>
         `
   }
@@ -801,6 +836,13 @@ class KanbanBoard {
         const taskId = e.target.closest('.move-task-btn').dataset.taskId;
         const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
         this.updateTaskStatus(taskId, targetStatus);
+      }
+
+      // Разворачивание подзадач
+      const expandToggle = e.target.closest('.expand-toggle');
+      if (expandToggle) {
+        e.stopPropagation(); // Чтобы не драггалось
+        this.toggleTaskExpand(expandToggle.dataset.taskId);
       }
     });
   }
