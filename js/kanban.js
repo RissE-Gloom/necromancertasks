@@ -292,8 +292,8 @@ class KanbanBoard {
     if (this.lucide) this.lucide.createIcons();
 
     list.querySelectorAll('.delete-label-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => { // Добавил event argument
-        e.stopPropagation(); // Важно: чтобы клик не всплывал
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (confirm(`Удалить метку "${this.labels[btn.dataset.index]}"?`)) {
           this.labels.splice(btn.dataset.index, 1);
           this.saveLabels();
