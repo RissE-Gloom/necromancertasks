@@ -820,7 +820,7 @@ class KanbanBoard {
     const isExpanded = this.expandedTasks.has(task.id);
 
     return `
-            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''} ${task.parentId ? 'subtask' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
                     ${hasSubtasks ? `
                         <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
@@ -954,8 +954,16 @@ class KanbanBoard {
     }
 
     if (columnContent && this.draggedTask) {
-      const afterElement = this.getDragAfterElement(columnContent, e.clientY)
       const draggingElement = document.querySelector(".dragging")
+
+      // Проверка наведения на задачу (для вкладывания)
+      const targetTask = e.target.closest(".task-card");
+      if (targetTask && targetTask.dataset.taskId !== this.draggedTask) {
+        // Логика определения зоны вкладывания уже есть в начале метода?
+        // Нет, в оригинале она была, но нужно удостовериться
+      }
+
+      const afterElement = this.getDragAfterElement(columnContent, e.clientY)
 
       if (afterElement == null) {
         columnContent.appendChild(draggingElement)
@@ -986,10 +994,27 @@ class KanbanBoard {
     console.log('Dragged task:', this.draggedTask);
 
     if (columnContent && this.draggedTask) {
-      const newStatus = columnContent.dataset.status
-      console.log('New status:', newStatus);
-      this.updateTaskStatus(this.draggedTask, newStatus)
+      // Проверяем, было ли вложение
+      const nestTarget = e.target.closest('.task-card');
+      const isNestTarget = nestTarget && nestTarget.classList.contains('drop-target-nest');
+
+      if (isNestTarget) {
+        const parentId = nestTarget.dataset.taskId;
+        // Статус берем от родителя
+        const task = this.tasks.find(t => t.id === parentId);
+        const newStatus = task ? task.status : columnContent.dataset.status;
+
+        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
+
+        // Разворачиваем родителя, чтобы показать вложение
+        this.expandedTasks.add(parentId);
+      } else {
+        const newStatus = columnContent.dataset.status
+        this.updateTaskStatus(this.draggedTask, newStatus, null) // Explicitly null parentId for root tasks
+      }
+
       columnContent.classList.remove("drag-over")
+      document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
     }
   }
 
