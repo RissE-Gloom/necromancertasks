@@ -8,7 +8,7 @@ class KanbanBoard {
     this.isOnline = false;
 
     // Загружаем данные асинхронно
-    this.initFirebase();  // ← вызов асинхронной инициализации
+    this.initFirebase();
 
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
@@ -21,12 +21,15 @@ class KanbanBoard {
     this.ws = null;
     this.retryCount = 0;
     this.maxRetries = 5;
+    this.#listenersAttached = false; // Флаг для предотвращения дублирования
 
     // Сразу отрисовываем то, что есть в localStorage
     setTimeout(() => {
       this.render();
-    }, 100);
+    }, 50);
   }
+
+  #listenersAttached = false;
 
   async initFirebase() {
     try {
@@ -47,34 +50,33 @@ class KanbanBoard {
 
         // Настраиваем реальное время синхронизацию
         this.firebase.setupRealtimeSync((tasks, columns) => {
-          console.log('🔄 Real-time update from Firebase');
-          this.tasks = Object.values(tasks || {});
-          this.columns = Object.values(columns || {});
-          this.render();
+          console.log('🔄 Update from Firebase');
+          const serverTasks = Object.values(tasks || {});
+          const serverColumns = Object.values(columns || {});
+
+          // Обновляем только если на сервере что-то есть
+          if (serverColumns.length > 0) {
+            this.tasks = serverTasks;
+            this.columns = serverColumns;
+            this.render();
+          }
         });
 
       } else {
         throw new Error('Firebase not initialized');
       }
     } catch (error) {
-      console.log('⚠️ Using localStorage as fallback');
+      console.log('⚠️ Using localStorage as fallback:', error);
       this.tasks = this.loadTasks();
       this.columns = this.loadColumns();
       this.isOnline = false;
     }
 
-    // Инициализация приложения после загрузки данных
+    // Полная инициализация
     this.setupWebSocket();
     this.setupEventListeners();
     this.setupDragAndDrop();
-    this.checkAndRemoveOldTasks();
     this.render();
-    this.lucide.createIcons();
-
-    // Интервал для проверки старых задач
-    setInterval(() => {
-      this.checkAndRemoveOldTasks();
-    }, 300000);
   }
 
   setupWebSocket() {
@@ -271,8 +273,13 @@ class KanbanBoard {
 
   // Data Management
   loadTasks() {
-    const saved = localStorage.getItem("kanban-tasks")
-    return saved ? JSON.parse(saved) : []
+    try {
+      const saved = localStorage.getItem("kanban-tasks")
+      return saved ? JSON.parse(saved) : []
+    } catch (e) {
+      console.error('Error loading tasks:', e);
+      return [];
+    }
   }
 
   async saveTasks() {
@@ -472,10 +479,13 @@ class KanbanBoard {
 
   // Event Listeners
   setupEventListeners() {
+    if (this.#listenersAttached) return;
+
     // Add Task Modal
-    document.getElementById("add-task-btn").addEventListener("click", () => {
-      this.openAddTaskModal()
-    })
+    const addTaskBtn = document.getElementById("add-task-btn");
+    if (addTaskBtn) {
+      addTaskBtn.addEventListener("click", () => this.openAddTaskModal());
+    }
 
     document.getElementById("close-task-modal").addEventListener("click", () => {
       this.closeModal("add-task-modal")
@@ -580,6 +590,8 @@ class KanbanBoard {
         this.closeModal(e.target.id)
       }
     })
+
+    this.#listenersAttached = true;
   }
 
   // Modal Management
@@ -1105,26 +1117,15 @@ class KanbanBoard {
     if (tasksRemoved) {
       this.saveTasks();
       this.render();
-      console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
     }
   }
 
 }
 
-// Initialize the application
-let kanban;
-let initializationCount = 0;
-
+// Initialize the application 
 document.addEventListener("DOMContentLoaded", () => {
-  initializationCount++;
-  console.log(`🏗️ DOMContentLoaded #${initializationCount}, creating KanbanBoard...`);
-
-  if (window.kanban) {
-    console.log('⚠️ WARNING: kanban already exists in window!');
+  if (!window.kanban) {
+    window.kanban = new KanbanBoard();
+    console.log('✅ KanbanBoard created and attached to window');
   }
-
-  kanban = new KanbanBoard();
-  window.kanban = kanban;
-
-  console.log('✅ KanbanBoard created');
 });
