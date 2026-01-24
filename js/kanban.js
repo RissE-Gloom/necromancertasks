@@ -282,17 +282,18 @@ class KanbanBoard {
     const list = document.getElementById("labels-list");
     if (!list) return; // Guard clause
     list.innerHTML = this.labels.map((label, index) => `
-        <div class="label-item" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); margin-bottom: 0.5rem; border-radius: 8px;">
-            <span style="color: white; font-weight: 500;">${label}</span>
-            <button class="btn-icon delete-label-btn" data-index="${index}" style="color: #ef4444;">
-                <i data-lucide="trash-2"></i>
+        <div class="label-chip">
+            <span>${label}</span>
+            <button class="delete-label-btn" data-index="${index}" title="Удалить метку">
+                <i data-lucide="x"></i>
             </button>
         </div>
     `).join("");
     if (this.lucide) this.lucide.createIcons();
 
     list.querySelectorAll('.delete-label-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', (e) => { // Добавил event argument
+        e.stopPropagation(); // Важно: чтобы клик не всплывал
         if (confirm(`Удалить метку "${this.labels[btn.dataset.index]}"?`)) {
           this.labels.splice(btn.dataset.index, 1);
           this.saveLabels();
@@ -371,6 +372,10 @@ class KanbanBoard {
       createdAt: new Date().toISOString(),
     };
 
+    if (task.parentId) {
+      this.expandedTasks.add(task.parentId);
+    }
+
     this.tasks.push(task);
     await this.saveTasks();
 
@@ -391,9 +396,11 @@ class KanbanBoard {
   }
 
   async deleteTask(taskId) {
-    this.tasks = this.tasks.filter((t) => t.id !== taskId);
-    await this.saveTasks();
-    this.render();
+    if (confirm("Вы уверены, что хотите удалить эту задачу?")) {
+      this.tasks = this.tasks.filter((t) => t.id !== taskId);
+      await this.saveTasks();
+      this.render();
+    }
   }
 
   getTasksByStatus(status) {
@@ -437,21 +444,23 @@ class KanbanBoard {
   async deleteColumn(status) {
     if (this.columns.length <= 1) return
 
-    // Move tasks from deleted column to first available column
-    const tasksInColumn = this.getTasksByStatus(status)
-    if (tasksInColumn.length > 0) {
-      const remainingColumns = this.columns.filter((c) => c.status !== status)
-      const targetStatus = remainingColumns[0].status
+    if (confirm("Вы уверены, что хотите удалить эту колонку и все задачи в ней?")) {
+      // Move tasks from deleted column to first available column
+      const tasksInColumn = this.getTasksByStatus(status)
+      if (tasksInColumn.length > 0) {
+        const remainingColumns = this.columns.filter((c) => c.status !== status)
+        const targetStatus = remainingColumns[0].status
 
-      tasksInColumn.forEach((task) => {
-        task.status = targetStatus
-      })
-      await this.saveTasks()
+        tasksInColumn.forEach((task) => {
+          task.status = targetStatus
+        })
+        await this.saveTasks()
+      }
+
+      this.columns = this.columns.filter((c) => c.status !== status)
+      await this.saveColumns()
+      this.render()
     }
-
-    this.columns = this.columns.filter((c) => c.status !== status)
-    await this.saveColumns()
-    this.render()
   }
 
   // Utility Methods
@@ -556,6 +565,16 @@ class KanbanBoard {
         this.renderLabels();
         this.openModal("labels-modal");
       });
+    }
+
+    const closeLabelsBtn = document.getElementById("close-labels-btn");
+    if (closeLabelsBtn) {
+      closeLabelsBtn.addEventListener("click", () => this.closeModal("labels-modal"));
+    }
+
+    const closeLabelsIcon = document.getElementById("close-labels-modal");
+    if (closeLabelsIcon) {
+      closeLabelsIcon.addEventListener("click", () => this.closeModal("labels-modal"));
     }
 
     const addLabelBtn = document.getElementById("add-label-btn");
