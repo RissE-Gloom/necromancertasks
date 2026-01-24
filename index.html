@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <script>
-// Конфигурация WebSocket URL
-window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
+    // Конфигурация WebSocket URL
+    window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com/ws';
 
-// Или для локальной разработки:
-// window.KANBAN_WS_URL = 'ws://localhost:8080';
+    // Или для локальной разработки:
+    // window.KANBAN_WS_URL = 'ws://localhost:8080';
 </script>
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,10 +15,11 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
+
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
+
 <body>
     <div class="app">
         <header class="app-header">
@@ -34,6 +36,10 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
                 <button class="btn btn-primary" id="add-task-btn">
                     <i data-lucide="plus"></i>
                     Новая карточка
+                </button>
+                <button class="btn btn-outline" id="subscribe-btn">
+                    <i data-lucide="bell"></i>
+                    Подписаться
                 </button>
             </div>
         </header>
@@ -72,11 +78,11 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
                     </select>
                 </div>
                 <div class="form-group">
-                   <label for="task-label">Метка (тайтл)</label>
-                   <select id="task-label" name="label">
-                       <option value="">Без метки</option>
-                       <!-- Options will be populated dynamically -->
-                   </select>
+                    <label for="task-label">Метка (тайтл)</label>
+                    <select id="task-label" name="label">
+                        <option value="">Без метки</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="task-status">Колонка</label>
@@ -93,52 +99,52 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
     </div>
 
     <!-- Edit Task Modal -->
-<div class="modal" id="edit-task-modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Редактировать карточку</h2>
-            <button class="modal-close" id="close-edit-task-modal">
-                <i data-lucide="x"></i>
-            </button>
+    <div class="modal" id="edit-task-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Редактировать карточку</h2>
+                <button class="modal-close" id="close-edit-task-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="edit-task-form">
+                <input type="hidden" id="edit-task-id" name="id">
+                <div class="form-group">
+                    <label for="edit-task-title">Название</label>
+                    <input type="text" id="edit-task-title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-description">Описание</label>
+                    <textarea id="edit-task-description" name="description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-priority">Приоритет</label>
+                    <select id="edit-task-priority" name="priority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-status">Колонка</label>
+                    <select id="edit-task-status" name="status">
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-label">Метка (тайтл)</label>
+                    <select id="edit-task-label" name="label">
+                        <option value="">Без метки</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="cancel-edit-task">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
         </div>
-        <form class="modal-body" id="edit-task-form">
-            <input type="hidden" id="edit-task-id" name="id">
-            <div class="form-group">
-                <label for="edit-task-title">Название</label>
-                <input type="text" id="edit-task-title" name="title" required>
-            </div>
-            <div class="form-group">
-                <label for="edit-task-description">Описание</label>
-                <textarea id="edit-task-description" name="description" rows="3"></textarea>
-            </div>
-            <div class="form-group">
-                <label for="edit-task-priority">Приоритет</label>
-                <select id="edit-task-priority" name="priority">
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="edit-task-status">Колонка</label>
-                <select id="edit-task-status" name="status">
-                    <!-- Options will be populated dynamically -->
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="edit-task-label">Метка (тайтл)</label>
-                <select id="edit-task-label" name="label">
-                    <option value="">Без метки</option>
-                    <!-- Options will be populated dynamically -->
-                </select>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline" id="cancel-edit-task">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-            </div>
-        </form>
     </div>
-</div>
 
     <!-- Add Column Modal -->
     <div class="modal" id="add-column-modal">
@@ -206,6 +212,7 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
                         </button>
                     </div>
                 </div>
+
                 <div class="modal-actions">
                     <button type="button" class="btn btn-outline" id="close-labels-btn">Закрыть</button>
                 </div>
@@ -213,10 +220,32 @@ window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
         </div>
     </div>
 
+    <!-- Subscribe Modal -->
+    <div class="modal" id="subscribe-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Подписка на уведомления</h2>
+                <button class="modal-close" id="close-subscribe-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Перейдите в бота и нажмите Start для подключения уведомлений:</p>
+                <div class="form-group" style="text-align: center; margin-top: 1rem;">
+                    <a href="https://t.me/NecromancerTaskBot" target="_blank" class="btn btn-primary">
+                        <i data-lucide="send"></i>
+                        Открыть бота
+                    </a>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" id="cancel-subscribe">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
     <script type="module" src="js/kanban.js"></script>
 </body>
+
 </html>
-<script>
-  lucide.createIcons();
-</script>
