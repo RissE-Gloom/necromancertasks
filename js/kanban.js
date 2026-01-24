@@ -481,14 +481,12 @@ class KanbanBoard {
       // 1. Статические кнопки (Header)
       if (target.closest("#add-task-btn")) this.openAddTaskModal();
       if (target.closest("#add-column-btn")) this.openAddColumnModal();
-      if (target.closest("#subscribe-btn")) this.openModal("subscribe-modal");
       if (target.closest("#manage-labels-btn")) { this.renderLabels(); this.openModal("labels-modal"); }
 
       // 2. Модалки (Закрытие)
       if (target.closest(".modal-close") || target.closest(".btn-outline#cancel-task") ||
         target.closest(".btn-outline#cancel-edit-task") || target.closest(".btn-outline#cancel-column") ||
-        target.closest(".btn-outline#cancel-edit-column") || target.closest("#close-labels-btn") ||
-        target.closest("#cancel-subscribe")) {
+        target.closest(".btn-outline#cancel-edit-column") || target.closest("#close-labels-btn")) {
         const modal = target.closest(".modal");
         if (modal) this.closeModal(modal.id);
       }
