@@ -85,23 +85,11 @@ class KanbanBoard {
   }
 
   setupWebSocket() {
-    // Защита от множественных подключений
-    if (this.ws) {
-      if (this.ws.readyState === WebSocket.OPEN) {
-        console.log('⚠️ WebSocket already connected, skipping...');
-        return;
-      }
-      if (this.ws.readyState === WebSocket.CONNECTING) {
-        console.log('⚠️ WebSocket already connecting, skipping...');
-        return;
-      }
-      // Если соединение закрыто или в состоянии закрытия, продолжаем создание нового
-      console.log('🔌 WebSocket exists but not connected, creating new connection...');
-    }
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
     try {
-      const wsUrl = 'wss://kanban-bot-pr1v.onrender.com/ws';
-      console.log('🔗 Creating WebSocket connection...');
+      const wsUrl = window.KANBAN_WS_URL || 'wss://kanban-bot-pr1v.onrender.com/ws';
+      console.log('🔗 Connecting to WebSocket:', wsUrl);
 
       this.ws = new WebSocket(wsUrl);
 
@@ -486,126 +474,86 @@ class KanbanBoard {
   setupEventListeners() {
     if (this.#listenersAttached) return;
 
-    // Add Task Modal
-    const addTaskBtn = document.getElementById("add-task-btn");
-    if (addTaskBtn) {
-      addTaskBtn.addEventListener("click", () => this.openAddTaskModal());
-    }
+    // --- Глобальное делегирование кликов ---
+    document.addEventListener("click", (e) => {
+      const target = e.target;
 
-    document.getElementById("close-task-modal").addEventListener("click", () => {
-      this.closeModal("add-task-modal")
-    })
+      // 1. Статические кнопки (Header)
+      if (target.closest("#add-task-btn")) this.openAddTaskModal();
+      if (target.closest("#add-column-btn")) this.openAddColumnModal();
+      if (target.closest("#manage-labels-btn")) { this.renderLabels(); this.openModal("labels-modal"); }
 
-    document.getElementById("cancel-task").addEventListener("click", () => {
-      this.closeModal("add-task-modal")
-    })
+      // 2. Модалки (Закрытие)
+      if (target.closest(".modal-close") || target.closest(".btn-outline#cancel-task") ||
+        target.closest(".btn-outline#cancel-edit-task") || target.closest(".btn-outline#cancel-column") ||
+        target.closest(".btn-outline#cancel-edit-column") || target.closest("#close-labels-btn")) {
+        const modal = target.closest(".modal");
+        if (modal) this.closeModal(modal.id);
+      }
+      if (target.classList.contains("modal")) this.closeModal(target.id);
 
-    document.getElementById("add-task-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleAddTask(e)
-    })
+      // 3. Динамические кнопки колонок
+      const editColBtn = target.closest('.edit-column-btn');
+      if (editColBtn) this.openEditColumnModal(editColBtn.dataset.status, editColBtn.dataset.title);
 
-    // Edit Task Modal
-    document.getElementById("close-edit-task-modal").addEventListener("click", () => {
-      this.closeModal("edit-task-modal")
-    })
+      const delColBtn = target.closest('.delete-column-btn');
+      if (delColBtn) this.deleteColumn(delColBtn.dataset.status);
 
-    document.getElementById("cancel-edit-task").addEventListener("click", () => {
-      this.closeModal("edit-task-modal")
-    })
+      // 4. Динамические кнопки задач
+      const editTaskBtn = target.closest('.edit-task-btn');
+      if (editTaskBtn) this.openEditTaskModal(editTaskBtn.dataset.taskId);
 
-    document.getElementById("edit-task-form").addEventListener("submit", (e) => {
-      e.preventDefault()
-      this.handleEditTask(e)
-    })
+      const delTaskBtn = target.closest('.delete-task-btn');
+      if (delTaskBtn) this.deleteTask(delTaskBtn.dataset.taskId);
 
-    // Add Column Modal
-    const addColumnBtn = document.getElementById("add-column-btn");
-    if (addColumnBtn) addColumnBtn.addEventListener("click", () => this.openAddColumnModal());
+      const moveTaskBtn = target.closest('.move-task-btn');
+      if (moveTaskBtn) this.updateTaskStatus(moveTaskBtn.dataset.taskId, moveTaskBtn.dataset.targetStatus);
 
-    const closeColumnBtn = document.getElementById("close-column-modal");
-    if (closeColumnBtn) closeColumnBtn.addEventListener("click", () => this.closeModal("add-column-modal"));
+      const expandToggle = target.closest('.expand-toggle');
+      if (expandToggle) this.toggleTaskExpand(expandToggle.dataset.taskId);
 
-    const cancelColumnBtn = document.getElementById("cancel-column");
-    if (cancelColumnBtn) cancelColumnBtn.addEventListener("click", () => this.closeModal("add-column-modal"));
+      // 5. Клик по фону колонки (быстрое добавление)
+      const columnContent = target.closest('.column-content');
+      if (columnContent && target === columnContent) {
+        const select = document.getElementById("task-status");
+        if (select) select.value = columnContent.dataset.status;
+        this.openAddTaskModal();
+      }
 
-    const addColumnForm = document.getElementById("add-column-form");
-    if (addColumnForm) {
-      addColumnForm.addEventListener("submit", (e) => {
+      // 6. Dropdowns
+      if (target.closest(".dropdown-toggle")) {
         e.preventDefault();
-        this.handleAddColumn(e);
-      });
-    }
+        const dropdown = target.closest(".dropdown");
+        const wasOpen = dropdown.classList.contains("open");
+        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"));
+        if (!wasOpen) dropdown.classList.add("open");
+      } else if (!target.closest(".dropdown")) {
+        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"));
+      }
+    });
 
-    // Edit Column Modal
-    const closeEditColumnBtn = document.getElementById("close-edit-column-modal");
-    if (closeEditColumnBtn) closeEditColumnBtn.addEventListener("click", () => this.closeModal("edit-column-modal"));
+    // --- Сабмиты форм ---
+    document.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (e.target.id === "add-task-form") this.handleAddTask(e);
+      if (e.target.id === "edit-task-form") this.handleEditTask(e);
+      if (e.target.id === "add-column-form") this.handleAddColumn(e);
+      if (e.target.id === "edit-column-form") this.handleEditColumn(e);
+    });
 
-    const cancelEditColumnBtn = document.getElementById("cancel-edit-column");
-    if (cancelEditColumnBtn) cancelEditColumnBtn.addEventListener("click", () => this.closeModal("edit-column-modal"));
-
-    const editColumnForm = document.getElementById("edit-column-form");
-    if (editColumnForm) {
-      editColumnForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.handleEditColumn(e);
-      });
-    }
-
-    // Manage Labels Modal
-    const manageLabelsBtn = document.getElementById("manage-labels-btn");
-    if (manageLabelsBtn) {
-      manageLabelsBtn.addEventListener("click", () => {
-        this.renderLabels();
-        this.openModal("labels-modal");
-      });
-    }
-
-    const closeLabelsBtn1 = document.getElementById("close-labels-modal");
-    if (closeLabelsBtn1) closeLabelsBtn1.addEventListener("click", () => this.closeModal("labels-modal"));
-
-    const closeLabelsBtn2 = document.getElementById("close-labels-btn");
-    if (closeLabelsBtn2) closeLabelsBtn2.addEventListener("click", () => this.closeModal("labels-modal"));
-
+    // --- Вспомогательные кнопки в модалках ---
     const addLabelBtn = document.getElementById("add-label-btn");
     if (addLabelBtn) {
-      addLabelBtn.addEventListener("click", () => {
+      addLabelBtn.onclick = () => {
         const input = document.getElementById("new-label-name");
-        if (!input) return;
-        const name = input.value.trim();
-        if (name && !this.labels.includes(name)) {
-          this.labels.push(name);
+        if (input && input.value.trim() && !this.labels.includes(input.value.trim())) {
+          this.labels.push(input.value.trim());
           input.value = "";
           this.saveLabels();
           this.renderLabels();
         }
-      });
+      };
     }
-
-    document.addEventListener("click", (e) => {
-      // Handle dropdown toggles
-      if (e.target.closest(".dropdown-toggle")) {
-        e.preventDefault()
-        const dropdown = e.target.closest(".dropdown")
-        const isOpen = dropdown.classList.contains("open")
-
-        // Close all dropdowns
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
-
-        // Toggle current dropdown
-        if (!isOpen) {
-          dropdown.classList.add("open")
-        }
-      } else if (!e.target.closest(".dropdown")) {
-        // Close all dropdowns when clicking outside
-        document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
-      }
-
-      // Close modals when clicking outside
-      if (e.target.classList.contains("modal")) {
-        this.closeModal(e.target.id)
-      }
-    })
 
     this.#listenersAttached = true;
   }
@@ -778,10 +726,7 @@ class KanbanBoard {
       wrapper.appendChild(columnElement)
     })
 
-    this.setupColumnClickHandlers();
-    this.setupDynamicEventListeners();
-
-    console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
+    console.log('Columns rendered');
   }
 
   createColumnElement(column) {
@@ -887,52 +832,9 @@ class KanbanBoard {
     `;
   }
 
-  // Новый метод для привязки динамических обработчиков
-  setupDynamicEventListeners() {
-    // Обработчики для кнопок колонок
-    document.querySelectorAll('.edit-column-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const status = e.target.closest('.edit-column-btn').dataset.status;
-        const title = e.target.closest('.edit-column-btn').dataset.title;
-        this.openEditColumnModal(status, title);
-      });
-    });
-
-    document.querySelectorAll('.delete-column-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const status = e.target.closest('.delete-column-btn').dataset.status;
-        this.deleteColumn(status);
-      });
-    });
-
-    // Обработчики для кнопок задач (делегирование событий)
-    document.addEventListener('click', (e) => {
-      // Редактирование задачи
-      if (e.target.closest('.edit-task-btn')) {
-        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
-        this.openEditTaskModal(taskId);
-      }
-
-      // Удаление задачи
-      if (e.target.closest('.delete-task-btn')) {
-        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
-        this.deleteTask(taskId);
-      }
-
-      // Перемещение задачи
-      if (e.target.closest('.move-task-btn')) {
-        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
-        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
-        this.updateTaskStatus(taskId, targetStatus);
-      }
-
-      // Переключатель сворачивания
-      if (e.target.closest('.expand-toggle')) {
-        const taskId = e.target.closest('.expand-toggle').dataset.taskId;
-        this.toggleTaskExpand(taskId);
-      }
-    });
-  }
+  // Методы больше не нужны, так как используем глобальное делегирование
+  setupColumnClickHandlers() { }
+  setupDynamicEventListeners() { }
 
   setupDragAndDrop() {
     // Привязываем контекст ко всем обработчикам
