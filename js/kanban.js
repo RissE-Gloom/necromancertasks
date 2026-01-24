@@ -12,8 +12,8 @@ class KanbanBoard {
 
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
-    this.expandedTasks = new Set() // для отслеживания развернутых подзадач
-    this.labels = this.loadLabels() // список меток (тайтлов)
+    this.expandedTasks = new Set()
+    this.labels = this.loadLabels()
     this.currentEditingColumn = null
     this.lucide = window.lucide
     this.draggedTask = null
@@ -21,6 +21,11 @@ class KanbanBoard {
     this.ws = null;
     this.retryCount = 0;
     this.maxRetries = 5;
+
+    // Сразу отрисовываем то, что есть в localStorage
+    setTimeout(() => {
+      this.render();
+    }, 100);
   }
 
   async initFirebase() {
@@ -283,14 +288,16 @@ class KanbanBoard {
   }
 
   loadColumns() {
-    const saved = localStorage.getItem("kanban-columns")
-    return saved
-      ? JSON.parse(saved)
-      : [
-        { id: "todo", title: "To Do", status: "todo" },
-        { id: "in-progress", title: "In Progress", status: "in-progress" },
-        { id: "done", title: "Done", status: "done" },
-      ]
+    const saved = localStorage.getItem("kanban-columns");
+    const columns = saved ? JSON.parse(saved) : [
+      { id: "todo", title: "Этап клина", status: "todo" },
+      { id: "in-progress", title: "Этап перевода", status: "in-progress" },
+      { id: "done", title: "Этап редактуры", status: "done" },
+      { id: "backlog", title: "Бета-рид", status: "backlog" },
+      { id: "review", title: "Этап тайпа", status: "review" },
+      { id: "testing", title: "Клин (ПТ, Баст, айдол)", status: "testing" }
+    ];
+
     return columns.map((col, index) => ({
       ...col,
       order: col.order !== undefined ? col.order : index
@@ -604,159 +611,159 @@ class KanbanBoard {
       });
     });
   }
-}
 
-openModal(modalId) {
-  document.getElementById(modalId).classList.add("active")
-  document.body.classList.add("modal-open")
-}
-
-closeModal(modalId) {
-  document.getElementById(modalId).classList.remove("active")
-  document.body.classList.remove("modal-open")
-
-  // Reset forms
-  const form = document.querySelector(`#${modalId} form`)
-  if (form) form.reset()
-
-  this.currentEditingColumn = null
-}
-
-populateStatusOptions() {
-  const select = document.getElementById("task-status")
-  select.innerHTML = ""
-
-  this.columns.forEach((column) => {
-    const option = document.createElement("option")
-    option.value = column.status
-    option.textContent = column.title
-    select.appendChild(option)
-  })
-
-  this.updateLabelSelects();
-}
-
-// Form Handlers
-handleAddTask(e) {
-  const formData = new FormData(e.target)
-  const taskData = {
-    title: formData.get("title"),
-    description: formData.get("description"),
-    priority: formData.get("priority"),
-    status: formData.get("status"),
-    label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
+  // Modal Management
+  openModal(modalId) {
+    document.getElementById(modalId).classList.add("active")
+    document.body.classList.add("modal-open")
   }
 
-  this.addTask(taskData)
-  this.closeModal("add-task-modal")
-}
+  closeModal(modalId) {
+    document.getElementById(modalId).classList.remove("active")
+    document.body.classList.remove("modal-open")
 
-openEditTaskModal(taskId) {
-  const task = this.tasks.find(t => t.id === taskId)
-  if (!task) return
+    // Reset forms
+    const form = document.querySelector(`#${modalId} form`)
+    if (form) form.reset()
 
-  document.getElementById("edit-task-id").value = task.id
-  document.getElementById("edit-task-title").value = task.title
-  document.getElementById("edit-task-description").value = task.description || ""
-  document.getElementById("edit-task-priority").value = task.priority
-  document.getElementById("edit-task-status").value = task.status
-
-  this.updateLabelSelects();
-  document.getElementById("edit-task-label").value = task.label || "";
-
-  this.populateEditStatusOptions()
-  this.openModal("edit-task-modal")
-}
-
-populateEditStatusOptions() {
-  const select = document.getElementById("edit-task-status")
-  select.innerHTML = ""
-
-  this.columns.forEach((column) => {
-    const option = document.createElement("option")
-    option.value = column.status
-    option.textContent = column.title
-    select.appendChild(option)
-  })
-}
-
-handleEditTask(e) {
-  const formData = new FormData(e.target)
-  const taskId = formData.get("id")
-  const updatedData = {
-    title: formData.get("title"),
-    description: formData.get("description"),
-    priority: formData.get("priority"),
-    status: formData.get("status"),
-    label: formData.get("label") || ""
+    this.currentEditingColumn = null
   }
 
-  const taskIndex = this.tasks.findIndex(t => t.id === taskId)
-  if (taskIndex !== -1) {
-    this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData }
-    this.saveTasks()
-    this.render()
-    this.closeModal("edit-task-modal")
+  populateStatusOptions() {
+    const select = document.getElementById("task-status")
+    select.innerHTML = ""
+
+    this.columns.forEach((column) => {
+      const option = document.createElement("option")
+      option.value = column.status
+      option.textContent = column.title
+      select.appendChild(option)
+    })
+
+    this.updateLabelSelects();
   }
-}
 
-handleAddColumn(e) {
-  const formData = new FormData(e.target)
-  const title = formData.get("title")
+  // Form Handlers
+  handleAddTask(e) {
+    const formData = new FormData(e.target)
+    const taskData = {
+      title: formData.get("title"),
+      description: formData.get("description"),
+      priority: formData.get("priority"),
+      status: formData.get("status"),
+      label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
+    }
 
-  if (title.trim()) {
-    this.addColumn(title.trim())
-    this.closeModal("add-column-modal")
+    this.addTask(taskData)
+    this.closeModal("add-task-modal")
   }
-}
 
-handleEditColumn(e) {
-  const formData = new FormData(e.target)
-  const newTitle = formData.get("title")
+  openEditTaskModal(taskId) {
+    const task = this.tasks.find(t => t.id === taskId)
+    if (!task) return
 
-  if (newTitle.trim() && this.currentEditingColumn) {
-    this.updateColumnTitle(this.currentEditingColumn, newTitle.trim())
-    this.closeModal("edit-column-modal")
+    document.getElementById("edit-task-id").value = task.id
+    document.getElementById("edit-task-title").value = task.title
+    document.getElementById("edit-task-description").value = task.description || ""
+    document.getElementById("edit-task-priority").value = task.priority
+    document.getElementById("edit-task-status").value = task.status
+
+    this.updateLabelSelects();
+    document.getElementById("edit-task-label").value = task.label || "";
+
+    this.populateEditStatusOptions()
+    this.openModal("edit-task-modal")
   }
-}
 
-// Rendering
-render() {
-  this.renderColumns()
-  this.updateLabelSelects() // Синхронизируем выпадающие списки меток
-  this.lucide.createIcons() // Use the declared lucide variable
-}
+  populateEditStatusOptions() {
+    const select = document.getElementById("edit-task-status")
+    select.innerHTML = ""
 
-renderColumns() {
-  const wrapper = document.getElementById("columns-wrapper")
-  wrapper.innerHTML = ""
+    this.columns.forEach((column) => {
+      const option = document.createElement("option")
+      option.value = column.status
+      option.textContent = column.title
+      select.appendChild(option)
+    })
+  }
 
-  // Сортируем колонки по порядку перед рендером
-  const sortedColumns = [...this.columns].sort((a, b) => {
-    const orderA = a.order !== undefined ? a.order : 0;
-    const orderB = b.order !== undefined ? b.order : 0;
-    return orderA - orderB;
-  });
+  handleEditTask(e) {
+    const formData = new FormData(e.target)
+    const taskId = formData.get("id")
+    const updatedData = {
+      title: formData.get("title"),
+      description: formData.get("description"),
+      priority: formData.get("priority"),
+      status: formData.get("status"),
+      label: formData.get("label") || ""
+    }
 
-  sortedColumns.forEach((column) => {
-    const columnElement = this.createColumnElement(column)
-    wrapper.appendChild(columnElement)
-  })
+    const taskIndex = this.tasks.findIndex(t => t.id === taskId)
+    if (taskIndex !== -1) {
+      this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData }
+      this.saveTasks()
+      this.render()
+      this.closeModal("edit-task-modal")
+    }
+  }
 
-  this.setupColumnClickHandlers();
-  this.setupDynamicEventListeners();
+  handleAddColumn(e) {
+    const formData = new FormData(e.target)
+    const title = formData.get("title")
 
-  console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
-}
+    if (title.trim()) {
+      this.addColumn(title.trim())
+      this.closeModal("add-column-modal")
+    }
+  }
 
-createColumnElement(column) {
-  const tasks = this.getTasksByStatus(column.status)
+  handleEditColumn(e) {
+    const formData = new FormData(e.target)
+    const newTitle = formData.get("title")
 
-  const columnDiv = document.createElement("div")
-  columnDiv.className = "kanban-column"
-  columnDiv.dataset.status = column.status
+    if (newTitle.trim() && this.currentEditingColumn) {
+      this.updateColumnTitle(this.currentEditingColumn, newTitle.trim())
+      this.closeModal("edit-column-modal")
+    }
+  }
 
-  columnDiv.innerHTML = `
+  // Rendering
+  render() {
+    this.renderColumns()
+    this.updateLabelSelects() // Синхронизируем выпадающие списки меток
+    this.lucide.createIcons() // Use the declared lucide variable
+  }
+
+  renderColumns() {
+    const wrapper = document.getElementById("columns-wrapper")
+    wrapper.innerHTML = ""
+
+    // Сортируем колонки по порядку перед рендером
+    const sortedColumns = [...this.columns].sort((a, b) => {
+      const orderA = a.order !== undefined ? a.order : 0;
+      const orderB = b.order !== undefined ? b.order : 0;
+      return orderA - orderB;
+    });
+
+    sortedColumns.forEach((column) => {
+      const columnElement = this.createColumnElement(column)
+      wrapper.appendChild(columnElement)
+    })
+
+    this.setupColumnClickHandlers();
+    this.setupDynamicEventListeners();
+
+    console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
+  }
+
+  createColumnElement(column) {
+    const tasks = this.getTasksByStatus(column.status)
+
+    const columnDiv = document.createElement("div")
+    columnDiv.className = "kanban-column"
+    columnDiv.dataset.status = column.status
+
+    columnDiv.innerHTML = `
             <div class="column-header">
                 <div class="column-title-wrapper">
                     <h3 class="column-title">${column.title}</h3>
@@ -776,16 +783,16 @@ createColumnElement(column) {
             </div>
         `
 
-  return columnDiv
-}
+    return columnDiv
+  }
 
-createTaskElement(task) {
-  const priorityClass = `priority-${task.priority}`;
-  const subtasks = this.tasks.filter(t => t.parentId === task.id);
-  const isExpanded = this.expandedTasks.has(task.id);
-  const hasSubtasks = subtasks.length > 0;
+  createTaskElement(task) {
+    const priorityClass = `priority-${task.priority}`;
+    const subtasks = this.tasks.filter(t => t.parentId === task.id);
+    const isExpanded = this.expandedTasks.has(task.id);
+    const hasSubtasks = subtasks.length > 0;
 
-  return `
+    return `
             <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
                     ${hasSubtasks ? `
@@ -801,15 +808,15 @@ createTaskElement(task) {
                             </button>
                             <div class="dropdown-menu">
                                 ${this.columns
-      .map((col) =>
-        col.status !== task.status
-          ? `<button class="dropdown-item move-task-btn" data-task-id="${task.id}" data-target-status="${col.status}">
+        .map((col) =>
+          col.status !== task.status
+            ? `<button class="dropdown-item move-task-btn" data-task-id="${task.id}" data-target-status="${col.status}">
                                              <i data-lucide="arrow-right"></i>
                                              Перекинуть ${col.title}
                                            </button>`
-          : ""
-      )
-      .join("")}
+            : ""
+        )
+        .join("")}
                                   <button class="dropdown-item edit-task-btn" data-task-id="${task.id}">
                                      <i data-lucide="edit"></i>
                                      Редактировать
@@ -834,10 +841,10 @@ createTaskElement(task) {
                 ` : ''}
             </div>
         `
-}
+  }
 
-createSubTaskElement(task) {
-  return `
+  createSubTaskElement(task) {
+    return `
         <div class="task-card subtask priority-${task.priority}" data-task-id="${task.id}" draggable="true">
             <div class="task-header">
                 <h4 class="task-title">${task.title}</h4>
@@ -850,257 +857,257 @@ createSubTaskElement(task) {
             ${task.label ? `<span class="task-label">${task.label}</span>` : ''}
         </div>
     `;
-}
+  }
 
-// Новый метод для привязки динамических обработчиков
-setupDynamicEventListeners() {
-  // Обработчики для кнопок колонок
-  document.querySelectorAll('.edit-column-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const status = e.target.closest('.edit-column-btn').dataset.status;
-      const title = e.target.closest('.edit-column-btn').dataset.title;
-      this.openEditColumnModal(status, title);
+  // Новый метод для привязки динамических обработчиков
+  setupDynamicEventListeners() {
+    // Обработчики для кнопок колонок
+    document.querySelectorAll('.edit-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.edit-column-btn').dataset.status;
+        const title = e.target.closest('.edit-column-btn').dataset.title;
+        this.openEditColumnModal(status, title);
+      });
     });
-  });
 
-  document.querySelectorAll('.delete-column-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const status = e.target.closest('.delete-column-btn').dataset.status;
-      this.deleteColumn(status);
+    document.querySelectorAll('.delete-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.delete-column-btn').dataset.status;
+        this.deleteColumn(status);
+      });
     });
-  });
 
-  // Обработчики для кнопок задач (делегирование событий)
-  document.addEventListener('click', (e) => {
-    // Редактирование задачи
-    if (e.target.closest('.edit-task-btn')) {
-      const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
-      this.openEditTaskModal(taskId);
-    }
+    // Обработчики для кнопок задач (делегирование событий)
+    document.addEventListener('click', (e) => {
+      // Редактирование задачи
+      if (e.target.closest('.edit-task-btn')) {
+        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+        this.openEditTaskModal(taskId);
+      }
 
-    // Удаление задачи
-    if (e.target.closest('.delete-task-btn')) {
-      const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
-      this.deleteTask(taskId);
-    }
+      // Удаление задачи
+      if (e.target.closest('.delete-task-btn')) {
+        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+        this.deleteTask(taskId);
+      }
 
-    // Перемещение задачи
-    if (e.target.closest('.move-task-btn')) {
-      const taskId = e.target.closest('.move-task-btn').dataset.taskId;
-      const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
-      this.updateTaskStatus(taskId, targetStatus);
-    }
+      // Перемещение задачи
+      if (e.target.closest('.move-task-btn')) {
+        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+        this.updateTaskStatus(taskId, targetStatus);
+      }
 
-    // Переключатель сворачивания
-    if (e.target.closest('.expand-toggle')) {
-      const taskId = e.target.closest('.expand-toggle').dataset.taskId;
-      this.toggleTaskExpand(taskId);
-    }
-  });
-}
+      // Переключатель сворачивания
+      if (e.target.closest('.expand-toggle')) {
+        const taskId = e.target.closest('.expand-toggle').dataset.taskId;
+        this.toggleTaskExpand(taskId);
+      }
+    });
+  }
 
-setupDragAndDrop() {
-  // Привязываем контекст ко всем обработчикам
-  document.addEventListener("dragstart", (e) => {
-    if (e.target.classList.contains("task-card")) {
-      this.handleDragStart(e)
-    }
-  })
+  setupDragAndDrop() {
+    // Привязываем контекст ко всем обработчикам
+    document.addEventListener("dragstart", (e) => {
+      if (e.target.classList.contains("task-card")) {
+        this.handleDragStart(e)
+      }
+    })
 
-  document.addEventListener("dragover", (e) => {
+    document.addEventListener("dragover", (e) => {
+      e.preventDefault()
+      this.handleDragOver(e)
+    })
+
+    document.addEventListener("dragenter", (e) => {
+      e.preventDefault()
+      this.handleDragEnter(e)
+    })
+
+    document.addEventListener("dragleave", (e) => {
+      this.handleDragLeave(e)
+    })
+
+    document.addEventListener("drop", (e) => {
+      e.preventDefault()
+      this.handleDrop(e) // Используем метод класса вместо анонимной функции
+    })
+
+    document.addEventListener("dragend", (e) => {
+      this.handleDragEnd(e) // Используем метод класса вместо анонимной функции
+    })
+  }
+
+  handleDragStart(e) {
+    this.draggedTask = e.target.dataset.taskId
+    this.draggedElement = e.target
+    e.target.classList.add("dragging")
+
+    // Set drag effect
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/html", e.target.outerHTML)
+  }
+
+  handleDragOver(e) {
     e.preventDefault()
-    this.handleDragOver(e)
-  })
+    e.dataTransfer.dropEffect = "move"
 
-  document.addEventListener("dragenter", (e) => {
-    e.preventDefault()
-    this.handleDragEnter(e)
-  })
+    const columnContent = e.target.closest(".column-content")
+    const taskCard = e.target.closest(".task-card")
 
-  document.addEventListener("dragleave", (e) => {
-    this.handleDragLeave(e)
-  })
+    // Снимаем старые выделения вложенности
+    document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
 
-  document.addEventListener("drop", (e) => {
-    e.preventDefault()
-    this.handleDrop(e) // Используем метод класса вместо анонимной функции
-  })
+    if (taskCard && taskCard.dataset.taskId !== this.draggedTask) {
+      const rect = taskCard.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
 
-  document.addEventListener("dragend", (e) => {
-    this.handleDragEnd(e) // Используем метод класса вместо анонимной функции
-  })
-}
-
-handleDragStart(e) {
-  this.draggedTask = e.target.dataset.taskId
-  this.draggedElement = e.target
-  e.target.classList.add("dragging")
-
-  // Set drag effect
-  e.dataTransfer.effectAllowed = "move"
-  e.dataTransfer.setData("text/html", e.target.outerHTML)
-}
-
-handleDragOver(e) {
-  e.preventDefault()
-  e.dataTransfer.dropEffect = "move"
-
-  const columnContent = e.target.closest(".column-content")
-  const taskCard = e.target.closest(".task-card")
-
-  // Снимаем старые выделения вложенности
-  document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
-
-  if (taskCard && taskCard.dataset.taskId !== this.draggedTask) {
-    const rect = taskCard.getBoundingClientRect();
-    const relativeY = e.clientY - rect.top;
-
-    // "Зона вкладывания" - центральные 50% карточки
-    if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
-      taskCard.classList.add('drop-target-nest');
-      e.dataTransfer.dropEffect = "copy"; // Визуальный индикатор вкладывания
-      return;
+      // "Зона вкладывания" - центральные 50% карточки
+      if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
+        taskCard.classList.add('drop-target-nest');
+        e.dataTransfer.dropEffect = "copy"; // Визуальный индикатор вкладывания
+        return;
+      }
     }
-  }
 
-  if (columnContent && this.draggedTask) {
-    const afterElement = this.getDragAfterElement(columnContent, e.clientY)
-    const draggingElement = document.querySelector(".dragging")
+    if (columnContent && this.draggedTask) {
+      const afterElement = this.getDragAfterElement(columnContent, e.clientY)
+      const draggingElement = document.querySelector(".dragging")
 
-    if (afterElement == null) {
-      columnContent.appendChild(draggingElement)
-    } else {
-      columnContent.insertBefore(draggingElement, afterElement)
-    }
-  }
-}
-
-handleDragEnter(e) {
-  const columnContent = e.target.closest(".column-content")
-  if (columnContent) {
-    columnContent.classList.add("drag-over")
-  }
-}
-
-handleDragLeave(e) {
-  const columnContent = e.target.closest(".column-content")
-  if (columnContent && !columnContent.contains(e.relatedTarget)) {
-    columnContent.classList.remove("drag-over")
-  }
-}
-
-handleDrop(e) {
-  const columnContent = e.target.closest(".column-content")
-  const nestTarget = e.target.closest(".drop-target-nest")
-
-  if (this.draggedTask) {
-    if (nestTarget) {
-      // Вкладывание
-      const parentId = nestTarget.dataset.taskId;
-      const newStatus = nestTarget.closest('.kanban-column').dataset.status;
-      this.updateTaskStatus(this.draggedTask, newStatus, parentId);
-      nestTarget.classList.remove('drop-target-nest');
-    } else if (columnContent) {
-      // Обычное перемещение
-      const newStatus = columnContent.dataset.status;
-      this.updateTaskStatus(this.draggedTask, newStatus, null);
-    }
-  }
-
-  if (columnContent) columnContent.classList.remove("drag-over")
-}
-
-handleDragEnd(e) {
-  if (e.target.classList.contains("task-card")) {
-    e.target.classList.remove("dragging")
-  }
-
-  // Clean up drag over states
-  document.querySelectorAll(".column-content").forEach((column) => {
-    column.classList.remove("drag-over")
-  })
-
-  this.draggedTask = null
-  this.draggedElement = null
-}
-
-updateTaskStatus(taskId, newStatus, newParentId = undefined) {
-  const task = this.tasks.find(t => t.id === taskId);
-  if (!task) return;
-
-  const oldStatus = task.status;
-  const oldParentId = task.parentId;
-
-  task.status = newStatus;
-  if (newParentId !== undefined) {
-    // Проверка на зацикливание (нельзя вложить родителя в своего потомка)
-    if (newParentId === taskId) return;
-    task.parentId = newParentId;
-  }
-
-  // Если задача перемещена в колонку "готово" - запоминаем дату
-  const doneStatuses = ["done", "готово", "completed", "finished"];
-  if (doneStatuses.includes(newStatus) && !doneStatuses.includes(oldStatus)) {
-    task.movedToDoneAt = new Date().toISOString();
-  }
-
-  this.saveTasks();
-  this.render();
-
-  // Отправляем уведомление о перемещении
-  if (oldStatus !== newStatus || oldParentId !== task.parentId) {
-    this.trackTaskMovement(taskId, oldStatus, newStatus);
-  }
-}
-
-getDragAfterElement(container, y) {
-  const draggableElements = [...container.querySelectorAll(".task-card:not(.dragging)")]
-
-  return draggableElements.reduce(
-    (closest, child) => {
-      const box = child.getBoundingClientRect()
-      const offset = y - box.top - box.height / 2
-
-      if (offset < 0 && offset > closest.offset) {
-        return { offset: offset, element: child }
+      if (afterElement == null) {
+        columnContent.appendChild(draggingElement)
       } else {
-        return closest
-      }
-    },
-    { offset: Number.NEGATIVE_INFINITY },
-  ).element
-}
-
-checkAndRemoveOldTasks() {
-  const now = new Date();
-  const threeDaysAgo = new Date(now);
-  threeDaysAgo.setDate(now.getDate() - 3);
-
-  let tasksRemoved = false;
-  const doneStatuses = ["done", "готово", "completed", "finished"];
-
-  this.tasks = this.tasks.filter(task => {
-    if (doneStatuses.includes(task.status)) {
-      // Используем дату перемещения в "готово" или дату создания
-      const relevantDate = task.movedToDoneAt ?
-        new Date(task.movedToDoneAt) :
-        new Date(task.createdAt);
-
-      if (relevantDate < threeDaysAgo) {
-        console.log(`🗑️ Removing task: "${task.title}" (in done since: ${relevantDate.toLocaleDateString()})`);
-        tasksRemoved = true;
-        return false;
+        columnContent.insertBefore(draggingElement, afterElement)
       }
     }
-    return true;
-  });
+  }
 
-  if (tasksRemoved) {
+  handleDragEnter(e) {
+    const columnContent = e.target.closest(".column-content")
+    if (columnContent) {
+      columnContent.classList.add("drag-over")
+    }
+  }
+
+  handleDragLeave(e) {
+    const columnContent = e.target.closest(".column-content")
+    if (columnContent && !columnContent.contains(e.relatedTarget)) {
+      columnContent.classList.remove("drag-over")
+    }
+  }
+
+  handleDrop(e) {
+    const columnContent = e.target.closest(".column-content")
+    const nestTarget = e.target.closest(".drop-target-nest")
+
+    if (this.draggedTask) {
+      if (nestTarget) {
+        // Вкладывание
+        const parentId = nestTarget.dataset.taskId;
+        const newStatus = nestTarget.closest('.kanban-column').dataset.status;
+        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
+        nestTarget.classList.remove('drop-target-nest');
+      } else if (columnContent) {
+        // Обычное перемещение
+        const newStatus = columnContent.dataset.status;
+        this.updateTaskStatus(this.draggedTask, newStatus, null);
+      }
+    }
+
+    if (columnContent) columnContent.classList.remove("drag-over")
+  }
+
+  handleDragEnd(e) {
+    if (e.target.classList.contains("task-card")) {
+      e.target.classList.remove("dragging")
+    }
+
+    // Clean up drag over states
+    document.querySelectorAll(".column-content").forEach((column) => {
+      column.classList.remove("drag-over")
+    })
+
+    this.draggedTask = null
+    this.draggedElement = null
+  }
+
+  updateTaskStatus(taskId, newStatus, newParentId = undefined) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const oldStatus = task.status;
+    const oldParentId = task.parentId;
+
+    task.status = newStatus;
+    if (newParentId !== undefined) {
+      // Проверка на зацикливание (нельзя вложить родителя в своего потомка)
+      if (newParentId === taskId) return;
+      task.parentId = newParentId;
+    }
+
+    // Если задача перемещена в колонку "готово" - запоминаем дату
+    const doneStatuses = ["done", "готово", "completed", "finished"];
+    if (doneStatuses.includes(newStatus) && !doneStatuses.includes(oldStatus)) {
+      task.movedToDoneAt = new Date().toISOString();
+    }
+
     this.saveTasks();
     this.render();
-    console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
+
+    // Отправляем уведомление о перемещении
+    if (oldStatus !== newStatus || oldParentId !== task.parentId) {
+      this.trackTaskMovement(taskId, oldStatus, newStatus);
+    }
   }
-}
+
+  getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll(".task-card:not(.dragging)")]
+
+    return draggableElements.reduce(
+      (closest, child) => {
+        const box = child.getBoundingClientRect()
+        const offset = y - box.top - box.height / 2
+
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child }
+        } else {
+          return closest
+        }
+      },
+      { offset: Number.NEGATIVE_INFINITY },
+    ).element
+  }
+
+  checkAndRemoveOldTasks() {
+    const now = new Date();
+    const threeDaysAgo = new Date(now);
+    threeDaysAgo.setDate(now.getDate() - 3);
+
+    let tasksRemoved = false;
+    const doneStatuses = ["done", "готово", "completed", "finished"];
+
+    this.tasks = this.tasks.filter(task => {
+      if (doneStatuses.includes(task.status)) {
+        // Используем дату перемещения в "готово" или дату создания
+        const relevantDate = task.movedToDoneAt ?
+          new Date(task.movedToDoneAt) :
+          new Date(task.createdAt);
+
+        if (relevantDate < threeDaysAgo) {
+          console.log(`🗑️ Removing task: "${task.title}" (in done since: ${relevantDate.toLocaleDateString()})`);
+          tasksRemoved = true;
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (tasksRemoved) {
+      this.saveTasks();
+      this.render();
+      console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
+    }
+  }
 
 }
 

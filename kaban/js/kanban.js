@@ -1,173 +1,257 @@
 // Core Kanban Board Application
+import FirebaseService from '../firebase-service.js';
+
 class KanbanBoard {
   constructor() {
+    // Инициализируем Firebase
+    this.firebase = new FirebaseService();
+    this.isOnline = false;
+
+    // Загружаем данные асинхронно
+    this.initFirebase();  // ← вызов асинхронной инициализации
+
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
+    this.expandedTasks = new Set()
+    this.labels = this.loadLabels()
     this.currentEditingColumn = null
-    this.lucide = window.lucide // Declare the lucide variable
+    this.lucide = window.lucide
     this.draggedTask = null
     this.draggedElement = null
     this.ws = null;
-    this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
 
-    this.init()
+    // Сразу отрисовываем то, что есть в localStorage
+    setTimeout(() => {
+      this.render();
+    }, 100);
   }
 
-setupWebSocket() {
+  async initFirebase() {
     try {
-        this.ws = new WebSocket('ws://localhost:8080');
-        
-        this.ws.onopen = () => {
-            console.log('✅ Connected to bot server');
-            this.retryCount = 0;
-            
-            // Отправить ping для проверки соединения
-            this.ws.send(JSON.stringify({ type: 'PING' }));
-        };
+      // Ждем инициализации Firebase
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-        this.ws.onmessage = (event) => {
-            this.handleBotMessage(event.data);
-        };
+      if (this.firebase.isInitialized) {
+        console.log('🔄 Starting Firebase sync...');
 
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        this.ws.onclose = () => {
-            console.log('❌ Disconnected from bot server');
-            this.attemptReconnect();
-        };
-
-    } catch (error) {
-        console.error('WebSocket setup error:', error);
-    }
-}
-
-attemptReconnect() {
-    if (this.retryCount < this.maxRetries) {
-        this.retryCount++;
-        console.log(`🔁 Attempting reconnect (${this.retryCount}/${this.maxRetries})...`);
-        setTimeout(() => this.setupWebSocket(), 3000);
-    } else {
-        console.log('❌ Max reconnection attempts reached');
-    }
-}
-
-handleBotMessage(data) {
-    try {
-        const message = JSON.parse(data);
-        console.log('📨 Received from bot:', message.type);
-        
-        switch (message.type) {
-            case 'REQUEST_STATUS':
-                this.sendStatus(message.chatId);
-                break;
-                
-            case 'REQUEST_COLUMN_STATUS':
-                this.sendColumnStatus(message.chatId, message.columnStatus);
-                break;
-                
-            case 'CONNECTION_ESTABLISHED':
-                console.log('✅ Connection confirmed by bot server');
-                break;
+        // Используем manualSync для первоначальной загрузки
+        const syncResult = await this.firebase.manualSync();
+        if (syncResult) {
+          this.tasks = syncResult.tasks;
+          this.columns = syncResult.columns;
+          this.isOnline = true;
+          console.log('✅ Firebase data loaded');
         }
+
+        // Настраиваем реальное время синхронизацию
+        this.firebase.setupRealtimeSync((tasks, columns) => {
+          console.log('🔄 Real-time update from Firebase');
+          this.tasks = Object.values(tasks || {});
+          this.columns = Object.values(columns || {});
+          this.render();
+        });
+
+      } else {
+        throw new Error('Firebase not initialized');
+      }
     } catch (error) {
-        console.error('Message handling error:', error);
+      console.log('⚠️ Using localStorage as fallback');
+      this.tasks = this.loadTasks();
+      this.columns = this.loadColumns();
+      this.isOnline = false;
     }
-}
 
-sendColumnStatus(chatId, columnStatus) {
+    // Инициализация приложения после загрузки данных
+    this.setupWebSocket();
+    this.setupEventListeners();
+    this.setupDragAndDrop();
+    this.checkAndRemoveOldTasks();
+    this.render();
+    this.lucide.createIcons();
+
+    // Интервал для проверки старых задач
+    setInterval(() => {
+      this.checkAndRemoveOldTasks();
+    }, 300000);
+  }
+
+  setupWebSocket() {
+    // Защита от множественных подключений
+    if (this.ws) {
+      if (this.ws.readyState === WebSocket.OPEN) {
+        console.log('⚠️ WebSocket already connected, skipping...');
+        return;
+      }
+      if (this.ws.readyState === WebSocket.CONNECTING) {
+        console.log('⚠️ WebSocket already connecting, skipping...');
+        return;
+      }
+      // Если соединение закрыто или в состоянии закрытия, продолжаем создание нового
+      console.log('🔌 WebSocket exists but not connected, creating new connection...');
+    }
+
     try {
-        const column = this.columns.find(col => col.status === columnStatus);
-        if (!column) return;
+      const wsUrl = 'wss://kanban-bot-pr1v.onrender.com/ws';
+      console.log('🔗 Creating WebSocket connection...');
 
-        const tasks = this.getTasksByStatus(columnStatus);
-        const columnData = {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('✅ Connected to bot server');
+        this.retryCount = 0;
+
+        // Отправить ping для проверки соединения
+        this.ws.send(JSON.stringify({ type: 'PING' }));
+      };
+
+      this.ws.onmessage = (event) => {
+        this.handleBotMessage(event.data);
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+      };
+
+      this.ws.onclose = (event) => {
+        console.log('🔌 WebSocket closed:', event.code, event.reason);
+        this.attemptReconnect();
+      };
+
+    } catch (error) {
+      console.error('WebSocket setup error:', error);
+    }
+  }
+
+  attemptReconnect() {
+    if (this.retryCount < this.maxRetries) {
+      this.retryCount++;
+      console.log(`🔁 Attempting reconnect (${this.retryCount}/${this.maxRetries})...`);
+
+      // Экспоненциальная задержка
+      const delay = Math.min(3000 * Math.pow(2, this.retryCount), 30000);
+      setTimeout(() => this.setupWebSocket(), delay);
+    } else {
+      console.log('❌ Max reconnection attempts reached');
+      // Можно показать уведомление пользователю
+    }
+  }
+
+  handleBotMessage(data) {
+    try {
+      const message = JSON.parse(data);
+      console.log('📨 Received from bot:', message.type);
+
+      switch (message.type) {
+        case 'REQUEST_STATUS':
+          this.sendStatus(message.chatId);
+          break;
+
+        case 'REQUEST_COLUMN_STATUS':
+          this.sendColumnStatus(message.chatId, message.columnStatus);
+          break;
+
+        case 'CONNECTION_ESTABLISHED':
+          console.log('✅ Connection confirmed by bot server');
+          break;
+      }
+    } catch (error) {
+      console.error('Message handling error:', error);
+    }
+  }
+
+  sendColumnStatus(chatId, columnStatus) {
+    try {
+      const column = this.columns.find(col => col.status === columnStatus);
+      if (!column) return;
+
+      const tasks = this.getTasksByStatus(columnStatus);
+      const columnData = {
+        id: column.id,
+        title: column.title,
+        status: column.status,
+        taskCount: tasks.length,
+        tasks: tasks.map(task => ({
+          id: task.id,
+          title: task.title,
+          priority: task.priority,
+          label: task.label || '',
+          description: task.description || ''
+        }))
+      };
+
+      const response = {
+        type: 'COLUMN_STATUS_RESPONSE',
+        chatId: chatId,
+        column: columnData,
+        timestamp: new Date().toISOString()
+      };
+
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(response));
+        console.log('📤 Column status sent:', columnStatus);
+      }
+    } catch (error) {
+      console.error('Error sending column status:', error);
+    }
+  }
+
+  sendStatus(chatId = null) {
+    try {
+      const status = {
+        type: 'STATUS_RESPONSE',
+        chatId: chatId,
+        columns: this.columns.map(column => {
+          const tasks = this.getTasksByStatus(column.status);
+          return {
             id: column.id,
             title: column.title,
             status: column.status,
-            taskCount: tasks.length,
-            tasks: tasks.map(task => ({
-                id: task.id,
-                title: task.title,
-                priority: task.priority,
-                label: task.label || '',
-                description: task.description || ''
-            }))
-        };
+            taskCount: tasks.length
+          };
+        }),
+        labels: this.labels, // Добавляем список меток для бота
+        timestamp: new Date().toISOString()
+      };
 
-        const response = {
-            type: 'COLUMN_STATUS_RESPONSE',
-            chatId: chatId,
-            column: columnData,
-            timestamp: new Date().toISOString()
-        };
-        
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(response));
-            console.log('📤 Column status sent:', columnStatus);
-        }
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(status));
+        console.log('📤 Status sent to bot');
+      }
     } catch (error) {
-        console.error('Error sending column status:', error);
+      console.error('Error sending status:', error);
     }
-}
+  }
 
-sendStatus(chatId = null) {
-    try {
-        const status = {
-            type: 'STATUS_RESPONSE',
-            chatId: chatId,
-            columns: this.columns.map(column => {
-                const tasks = this.getTasksByStatus(column.status);
-                return {
-                    id: column.id,
-                    title: column.title,
-                    status: column.status,
-                    taskCount: tasks.length
-                };
-            }),
-            timestamp: new Date().toISOString()
-        };
-        
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(status));
-            console.log('📤 Status sent to bot');
-        }
-    } catch (error) {
-        console.error('Error sending status:', error);
-    }
-}
-
-trackTaskMovement(taskId, fromStatus, toStatus) {
+  trackTaskMovement(taskId, fromStatus, toStatus) {
     const task = this.tasks.find(t => t.id === taskId)
     if (!task) return
 
     const activity = {
-        type: 'TASK_MOVED',
-        taskId,
-        fromStatus,
-        toStatus,
-        timestamp: new Date().toISOString(),
-        task: {
-            id: task.id,
-            title: task.title,
-            priority: task.priority,
-            label: task.label || ''
-        }
+      type: 'TASK_MOVED',
+      taskId,
+      fromStatus,
+      toStatus,
+      timestamp: new Date().toISOString(),
+      task: {
+        id: task.id,
+        title: task.title,
+        priority: task.priority,
+        label: task.label || ''
+      }
     };
-    
+
     console.log('🔄 Tracking task movement:', activity);
     this.sendToBot(activity);
-}
+  }
 
-sendToBot(message) {
+  sendToBot(message) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify(message));
-        console.log('📤 Sent to bot:', message.type);
+      this.ws.send(JSON.stringify(message));
+      console.log('📤 Sent to bot:', message.type);
     }
-}
+  }
 
   init() {
     this.setupEventListeners()
@@ -181,9 +265,9 @@ sendToBot(message) {
 
     // 👇 Проверяем каждые 5 минут (300000 мс)
     setInterval(() => {
-        this.checkAndRemoveOldTasks()
+      this.checkAndRemoveOldTasks()
     }, 300000)
-}
+  }
 
   // Data Management
   loadTasks() {
@@ -191,90 +275,177 @@ sendToBot(message) {
     return saved ? JSON.parse(saved) : []
   }
 
-  saveTasks() {
-    localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks))
+  async saveTasks() {
+    if (this.isOnline) {
+      const success = await this.firebase.saveTasks(this.tasks);
+      if (!success) {
+        // Fallback на localStorage если Firebase недоступен
+        localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+      }
+    } else {
+      localStorage.setItem("kanban-tasks", JSON.stringify(this.tasks));
+    }
   }
 
   loadColumns() {
-    const saved = localStorage.getItem("kanban-columns")
-    return saved
-      ? JSON.parse(saved)
-      : [
-          { id: "todo", title: "To Do", status: "todo" },
-          { id: "in-progress", title: "In Progress", status: "in-progress" },
-          { id: "done", title: "Done", status: "done" },
-        ]
+    const saved = localStorage.getItem("kanban-columns");
+    const columns = saved ? JSON.parse(saved) : [
+      { id: "todo", title: "Этап клина", status: "todo" },
+      { id: "in-progress", title: "Этап перевода", status: "in-progress" },
+      { id: "done", title: "Этап редактуры", status: "done" },
+      { id: "backlog", title: "Бета-рид", status: "backlog" },
+      { id: "review", title: "Этап тайпа", status: "review" },
+      { id: "testing", title: "Клин (ПТ, Баст, айдол)", status: "testing" }
+    ];
+
+    return columns.map((col, index) => ({
+      ...col,
+      order: col.order !== undefined ? col.order : index
+    }));
   }
 
-  saveColumns() {
-    localStorage.setItem("kanban-columns", JSON.stringify(this.columns))
+  async saveColumns() {
+    if (this.isOnline) {
+      const success = await this.firebase.saveColumns(this.columns);
+      if (!success) {
+        // Fallback на localStorage если Firebase недоступен
+        localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+      }
+    } else {
+      localStorage.setItem("kanban-columns", JSON.stringify(this.columns));
+    }
+  }
+
+  // Label Management
+  loadLabels() {
+    const saved = localStorage.getItem("kanban-labels");
+    return saved ? JSON.parse(saved) : ["Баг", "Фича", "Проект X"];
+  }
+
+  saveLabels() {
+    localStorage.setItem("kanban-labels", JSON.stringify(this.labels));
+    this.updateLabelSelects();
+  }
+
+  renderLabels() {
+    const list = document.getElementById("labels-list");
+    list.innerHTML = this.labels.map((label, index) => `
+        <div class="label-item">
+            <span>${label}</span>
+            <button class="btn-icon delete-label-btn" data-index="${index}">
+                <i data-lucide="trash-2"></i>
+            </button>
+        </div>
+    `).join("");
+    this.lucide.createIcons();
+
+    list.querySelectorAll('.delete-label-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm(`Удалить метку "${this.labels[btn.dataset.index]}"?`)) {
+          this.labels.splice(btn.dataset.index, 1);
+          this.saveLabels();
+          this.renderLabels();
+        }
+      });
+    });
+  }
+
+  updateLabelSelects() {
+    const selects = [document.getElementById("task-label"), document.getElementById("edit-task-label")];
+    selects.forEach(select => {
+      if (!select) return;
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">Без метки</option>' +
+        this.labels.map(l => `<option value="${l}">${l}</option>`).join("");
+      select.value = currentValue;
+    });
   }
 
   // Task Management
-addTask(taskData) {
+  async addTask(taskData) {
     const task = {
-        id: this.generateId(),
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        priority: taskData.priority,
-        label: taskData.label || '',
-        createdAt: new Date().toISOString(),
+      id: this.generateId(),
+      title: taskData.title,
+      description: taskData.description,
+      status: taskData.status,
+      priority: taskData.priority,
+      label: taskData.label || '',
+      parentId: taskData.parentId || null,
+      createdAt: new Date().toISOString(),
     };
 
     this.tasks.push(task);
-    this.saveTasks();
-    
+    await this.saveTasks();
+
     // Отправляем уведомление о создании
     this.sendToBot({
-        type: 'TASK_CREATED',
-        taskId: task.id,
-        status: task.status,
-        timestamp: task.createdAt,
-        task: {
-            id: task.id,
-            title: task.title,
-            label: task.label || ''
-        }
+      type: 'TASK_CREATED',
+      taskId: task.id,
+      status: task.status,
+      timestamp: task.createdAt,
+      task: {
+        id: task.id,
+        title: task.title,
+        label: task.label || ''
+      }
     });
-    
-    this.render();
-}
 
-  deleteTask(taskId) {
-    this.tasks = this.tasks.filter((t) => t.id !== taskId)
-    this.saveTasks()
-    this.render()
+    this.render();
+  }
+
+  async deleteTask(taskId) {
+    if (!confirm("Вы уверены, что хотите удалить эту задачу?")) return;
+
+    const deleteRecursive = (id) => {
+      const subtasks = this.tasks.filter(t => t.parentId === id);
+      subtasks.forEach(st => deleteRecursive(st.id));
+      this.tasks = this.tasks.filter(t => t.id !== id);
+    };
+
+    deleteRecursive(taskId);
+    await this.saveTasks();
+    this.render();
   }
 
   getTasksByStatus(status) {
-    return this.tasks.filter((task) => task.status === status)
+    // Возвращаем только корневые задачи для колонки
+    return this.tasks.filter((task) => task.status === status && !task.parentId);
+  }
+
+  toggleTaskExpand(taskId) {
+    if (this.expandedTasks.has(taskId)) {
+      this.expandedTasks.delete(taskId);
+    } else {
+      this.expandedTasks.add(taskId);
+    }
+    this.render();
   }
 
   // Column Management
-  addColumn(title) {
+  async addColumn(title) {
     const status = title.toLowerCase().replace(/\s+/g, "-")
     const column = {
       id: status,
       title: title,
       status: status,
+      order: this.columns.length
     }
 
     this.columns.push(column)
-    this.saveColumns()
+    await this.saveColumns()
     this.render()
   }
 
-  updateColumnTitle(status, newTitle) {
+  async updateColumnTitle(status, newTitle) {
     const column = this.columns.find((c) => c.status === status)
     if (column) {
       column.title = newTitle
-      this.saveColumns()
+      await this.saveColumns()
       this.render()
     }
   }
 
-  deleteColumn(status) {
+  async deleteColumn(status) {
     if (this.columns.length <= 1) return
 
     // Move tasks from deleted column to first available column
@@ -286,11 +457,11 @@ addTask(taskData) {
       tasksInColumn.forEach((task) => {
         task.status = targetStatus
       })
-      this.saveTasks()
+      await this.saveTasks()
     }
 
     this.columns = this.columns.filter((c) => c.status !== status)
-    this.saveColumns()
+    await this.saveColumns()
     this.render()
   }
 
@@ -320,18 +491,38 @@ addTask(taskData) {
     })
 
     // Edit Task Modal
-document.getElementById("close-edit-task-modal").addEventListener("click", () => {
-    this.closeModal("edit-task-modal")
-})
+    document.getElementById("close-edit-task-modal").addEventListener("click", () => {
+      this.closeModal("edit-task-modal")
+    })
 
-document.getElementById("cancel-edit-task").addEventListener("click", () => {
-    this.closeModal("edit-task-modal")
-})
+    document.getElementById("cancel-edit-task").addEventListener("click", () => {
+      this.closeModal("edit-task-modal")
+    })
 
-document.getElementById("edit-task-form").addEventListener("submit", (e) => {
-    e.preventDefault()
-    this.handleEditTask(e)
-})
+    document.getElementById("edit-task-form").addEventListener("submit", (e) => {
+      e.preventDefault()
+      this.handleEditTask(e)
+    })
+
+    // Manage Labels Events
+    document.getElementById("manage-labels-btn").addEventListener("click", () => {
+      this.renderLabels();
+      this.openModal("labels-modal");
+    });
+
+    document.getElementById("close-labels-modal").addEventListener("click", () => this.closeModal("labels-modal"));
+    document.getElementById("close-labels-btn").addEventListener("click", () => this.closeModal("labels-modal"));
+
+    document.getElementById("add-label-btn").addEventListener("click", () => {
+      const input = document.getElementById("new-label-name");
+      const name = input.value.trim();
+      if (name && !this.labels.includes(name)) {
+        this.labels.push(name);
+        input.value = "";
+        this.saveLabels();
+        this.renderLabels();
+      }
+    });
 
     // Add Column Modal
     document.getElementById("add-column-btn").addEventListener("click", () => {
@@ -407,6 +598,21 @@ document.getElementById("edit-task-form").addEventListener("submit", (e) => {
     this.openModal("edit-column-modal")
   }
 
+  setupColumnClickHandlers() {
+    document.querySelectorAll('.column-content').forEach(column => {
+      column.addEventListener('click', (e) => {
+        // Если кликнули именно по фону колонки, а не по карточке
+        if (e.target === column) {
+          const status = column.dataset.status;
+          const select = document.getElementById("task-status");
+          select.value = status;
+          this.openAddTaskModal();
+        }
+      });
+    });
+  }
+
+  // Modal Management
   openModal(modalId) {
     document.getElementById(modalId).classList.add("active")
     document.body.classList.add("modal-open")
@@ -433,24 +639,26 @@ document.getElementById("edit-task-form").addEventListener("submit", (e) => {
       option.textContent = column.title
       select.appendChild(option)
     })
+
+    this.updateLabelSelects();
   }
 
   // Form Handlers
   handleAddTask(e) {
     const formData = new FormData(e.target)
     const taskData = {
-        title: formData.get("title"),
-        description: formData.get("description"),
-        priority: formData.get("priority"),
-        status: formData.get("status"),
-        label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
+      title: formData.get("title"),
+      description: formData.get("description"),
+      priority: formData.get("priority"),
+      status: formData.get("status"),
+      label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
     }
 
     this.addTask(taskData)
     this.closeModal("add-task-modal")
-}
+  }
 
-openEditTaskModal(taskId) {
+  openEditTaskModal(taskId) {
     const task = this.tasks.find(t => t.id === taskId)
     if (!task) return
 
@@ -460,40 +668,44 @@ openEditTaskModal(taskId) {
     document.getElementById("edit-task-priority").value = task.priority
     document.getElementById("edit-task-status").value = task.status
 
+    this.updateLabelSelects();
+    document.getElementById("edit-task-label").value = task.label || "";
+
     this.populateEditStatusOptions()
     this.openModal("edit-task-modal")
-}
+  }
 
-populateEditStatusOptions() {
+  populateEditStatusOptions() {
     const select = document.getElementById("edit-task-status")
     select.innerHTML = ""
 
     this.columns.forEach((column) => {
-        const option = document.createElement("option")
-        option.value = column.status
-        option.textContent = column.title
-        select.appendChild(option)
+      const option = document.createElement("option")
+      option.value = column.status
+      option.textContent = column.title
+      select.appendChild(option)
     })
-}
+  }
 
-handleEditTask(e) {
+  handleEditTask(e) {
     const formData = new FormData(e.target)
     const taskId = formData.get("id")
     const updatedData = {
-        title: formData.get("title"),
-        description: formData.get("description"),
-        priority: formData.get("priority"),
-        status: formData.get("status")
+      title: formData.get("title"),
+      description: formData.get("description"),
+      priority: formData.get("priority"),
+      status: formData.get("status"),
+      label: formData.get("label") || ""
     }
 
     const taskIndex = this.tasks.findIndex(t => t.id === taskId)
     if (taskIndex !== -1) {
-        this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData }
-        this.saveTasks()
-        this.render()
-        this.closeModal("edit-task-modal")
+      this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...updatedData }
+      this.saveTasks()
+      this.render()
+      this.closeModal("edit-task-modal")
     }
-}
+  }
 
   handleAddColumn(e) {
     const formData = new FormData(e.target)
@@ -518,6 +730,7 @@ handleEditTask(e) {
   // Rendering
   render() {
     this.renderColumns()
+    this.updateLabelSelects() // Синхронизируем выпадающие списки меток
     this.lucide.createIcons() // Use the declared lucide variable
   }
 
@@ -525,10 +738,22 @@ handleEditTask(e) {
     const wrapper = document.getElementById("columns-wrapper")
     wrapper.innerHTML = ""
 
-    this.columns.forEach((column) => {
+    // Сортируем колонки по порядку перед рендером
+    const sortedColumns = [...this.columns].sort((a, b) => {
+      const orderA = a.order !== undefined ? a.order : 0;
+      const orderB = b.order !== undefined ? b.order : 0;
+      return orderA - orderB;
+    });
+
+    sortedColumns.forEach((column) => {
       const columnElement = this.createColumnElement(column)
       wrapper.appendChild(columnElement)
     })
+
+    this.setupColumnClickHandlers();
+    this.setupDynamicEventListeners();
+
+    console.log('Columns order:', sortedColumns.map(c => ({ title: c.title, order: c.order })));
   }
 
   createColumnElement(column) {
@@ -545,10 +770,10 @@ handleEditTask(e) {
                     <span class="task-count">${tasks.length}</span>
                 </div>
                 <div class="column-actions">
-                    <button class="btn-icon" onclick="kanban.openEditColumnModal('${column.status}', '${column.title}')" title="Edit column">
+                    <button class="btn-icon edit-column-btn" data-status="${column.status}" data-title="${column.title}" title="Edit column">
                         <i data-lucide="edit-2"></i>
                     </button>
-                    <button class="btn-icon" onclick="kanban.deleteColumn('${column.status}')" title="Delete column">
+                    <button class="btn-icon delete-column-btn" data-status="${column.status}" title="Delete column">
                         <i data-lucide="trash-2"></i>
                     </button>
                 </div>
@@ -562,11 +787,19 @@ handleEditTask(e) {
   }
 
   createTaskElement(task) {
-    const priorityClass = `priority-${task.priority}`
+    const priorityClass = `priority-${task.priority}`;
+    const subtasks = this.tasks.filter(t => t.parentId === task.id);
+    const isExpanded = this.expandedTasks.has(task.id);
+    const hasSubtasks = subtasks.length > 0;
 
     return `
-            <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
+                    ${hasSubtasks ? `
+                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -575,20 +808,20 @@ handleEditTask(e) {
                             </button>
                             <div class="dropdown-menu">
                                 ${this.columns
-                                  .map((col) =>
-                                    col.status !== task.status
-                                      ? `<button class="dropdown-item" onclick="kanban.updateTaskStatus('${task.id}', '${col.status}')">
+        .map((col) =>
+          col.status !== task.status
+            ? `<button class="dropdown-item move-task-btn" data-task-id="${task.id}" data-target-status="${col.status}">
                                              <i data-lucide="arrow-right"></i>
                                              Перекинуть ${col.title}
                                            </button>`
-                                      : "",
-                                  )
-                                  .join("")}
-                                  <button class="dropdown-item" onclick="kanban.openEditTaskModal('${task.id}')">
+            : ""
+        )
+        .join("")}
+                                  <button class="dropdown-item edit-task-btn" data-task-id="${task.id}">
                                      <i data-lucide="edit"></i>
                                      Редактировать
                                   </button>
-                                <button class="dropdown-item delete" onclick="kanban.deleteTask('${task.id}')">
+                                <button class="dropdown-item delete-task-btn delete" data-task-id="${task.id}">
                                     <i data-lucide="trash-2"></i>
                                     Удалить
                                 </button>
@@ -601,41 +834,109 @@ handleEditTask(e) {
                     <span class="task-priority priority-${task.priority}">${task.priority}</span>
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
+                ${hasSubtasks && isExpanded ? `
+                    <div class="subtasks-container">
+                        ${subtasks.map(st => this.createSubTaskElement(st)).join("")}
+                    </div>
+                ` : ''}
             </div>
         `
-}
+  }
+
+  createSubTaskElement(task) {
+    return `
+        <div class="task-card subtask priority-${task.priority}" data-task-id="${task.id}" draggable="true">
+            <div class="task-header">
+                <h4 class="task-title">${task.title}</h4>
+                <div class="task-actions">
+                    <button class="btn-icon delete-task-btn" data-task-id="${task.id}">
+                        <i data-lucide="trash-2"></i>
+                    </button>
+                </div>
+            </div>
+            ${task.label ? `<span class="task-label">${task.label}</span>` : ''}
+        </div>
+    `;
+  }
+
+  // Новый метод для привязки динамических обработчиков
+  setupDynamicEventListeners() {
+    // Обработчики для кнопок колонок
+    document.querySelectorAll('.edit-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.edit-column-btn').dataset.status;
+        const title = e.target.closest('.edit-column-btn').dataset.title;
+        this.openEditColumnModal(status, title);
+      });
+    });
+
+    document.querySelectorAll('.delete-column-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const status = e.target.closest('.delete-column-btn').dataset.status;
+        this.deleteColumn(status);
+      });
+    });
+
+    // Обработчики для кнопок задач (делегирование событий)
+    document.addEventListener('click', (e) => {
+      // Редактирование задачи
+      if (e.target.closest('.edit-task-btn')) {
+        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+        this.openEditTaskModal(taskId);
+      }
+
+      // Удаление задачи
+      if (e.target.closest('.delete-task-btn')) {
+        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+        this.deleteTask(taskId);
+      }
+
+      // Перемещение задачи
+      if (e.target.closest('.move-task-btn')) {
+        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+        this.updateTaskStatus(taskId, targetStatus);
+      }
+
+      // Переключатель сворачивания
+      if (e.target.closest('.expand-toggle')) {
+        const taskId = e.target.closest('.expand-toggle').dataset.taskId;
+        this.toggleTaskExpand(taskId);
+      }
+    });
+  }
 
   setupDragAndDrop() {
     // Привязываем контекст ко всем обработчикам
     document.addEventListener("dragstart", (e) => {
-        if (e.target.classList.contains("task-card")) {
-            this.handleDragStart(e)
-        }
+      if (e.target.classList.contains("task-card")) {
+        this.handleDragStart(e)
+      }
     })
 
     document.addEventListener("dragover", (e) => {
-        e.preventDefault()
-        this.handleDragOver(e)
+      e.preventDefault()
+      this.handleDragOver(e)
     })
 
     document.addEventListener("dragenter", (e) => {
-        e.preventDefault()
-        this.handleDragEnter(e)
+      e.preventDefault()
+      this.handleDragEnter(e)
     })
 
     document.addEventListener("dragleave", (e) => {
-        this.handleDragLeave(e)
+      this.handleDragLeave(e)
     })
 
     document.addEventListener("drop", (e) => {
-        e.preventDefault()
-        this.handleDrop(e) // Используем метод класса вместо анонимной функции
+      e.preventDefault()
+      this.handleDrop(e) // Используем метод класса вместо анонимной функции
     })
 
     document.addEventListener("dragend", (e) => {
-        this.handleDragEnd(e) // Используем метод класса вместо анонимной функции
+      this.handleDragEnd(e) // Используем метод класса вместо анонимной функции
     })
-}
+  }
 
   handleDragStart(e) {
     this.draggedTask = e.target.dataset.taskId
@@ -652,6 +953,23 @@ handleEditTask(e) {
     e.dataTransfer.dropEffect = "move"
 
     const columnContent = e.target.closest(".column-content")
+    const taskCard = e.target.closest(".task-card")
+
+    // Снимаем старые выделения вложенности
+    document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
+
+    if (taskCard && taskCard.dataset.taskId !== this.draggedTask) {
+      const rect = taskCard.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
+
+      // "Зона вкладывания" - центральные 50% карточки
+      if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
+        taskCard.classList.add('drop-target-nest');
+        e.dataTransfer.dropEffect = "copy"; // Визуальный индикатор вкладывания
+        return;
+      }
+    }
+
     if (columnContent && this.draggedTask) {
       const afterElement = this.getDragAfterElement(columnContent, e.clientY)
       const draggingElement = document.querySelector(".dragging")
@@ -679,47 +997,68 @@ handleEditTask(e) {
   }
 
   handleDrop(e) {
-    console.log('🖱️ Drop event triggered');
     const columnContent = e.target.closest(".column-content")
-    console.log('Column content:', columnContent);
-    console.log('Dragged task:', this.draggedTask);
-    
-    if (columnContent && this.draggedTask) {
-        const newStatus = columnContent.dataset.status
-        console.log('New status:', newStatus);
-        this.updateTaskStatus(this.draggedTask, newStatus)
-        columnContent.classList.remove("drag-over")
+    const nestTarget = e.target.closest(".drop-target-nest")
+
+    if (this.draggedTask) {
+      if (nestTarget) {
+        // Вкладывание
+        const parentId = nestTarget.dataset.taskId;
+        const newStatus = nestTarget.closest('.kanban-column').dataset.status;
+        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
+        nestTarget.classList.remove('drop-target-nest');
+      } else if (columnContent) {
+        // Обычное перемещение
+        const newStatus = columnContent.dataset.status;
+        this.updateTaskStatus(this.draggedTask, newStatus, null);
+      }
     }
-}
+
+    if (columnContent) columnContent.classList.remove("drag-over")
+  }
 
   handleDragEnd(e) {
     if (e.target.classList.contains("task-card")) {
-        e.target.classList.remove("dragging")
+      e.target.classList.remove("dragging")
     }
 
     // Clean up drag over states
     document.querySelectorAll(".column-content").forEach((column) => {
-        column.classList.remove("drag-over")
+      column.classList.remove("drag-over")
     })
 
     this.draggedTask = null
     this.draggedElement = null
-}
+  }
 
-  updateTaskStatus(taskId, newStatus) {
-    const task = this.tasks.find(t => t.id === taskId)
-    if (!task) return
+  updateTaskStatus(taskId, newStatus, newParentId = undefined) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
 
-    const oldStatus = task.status
-    task.status = newStatus
-    this.saveTasks()
-    this.render()
+    const oldStatus = task.status;
+    const oldParentId = task.parentId;
+
+    task.status = newStatus;
+    if (newParentId !== undefined) {
+      // Проверка на зацикливание (нельзя вложить родителя в своего потомка)
+      if (newParentId === taskId) return;
+      task.parentId = newParentId;
+    }
+
+    // Если задача перемещена в колонку "готово" - запоминаем дату
+    const doneStatuses = ["done", "готово", "completed", "finished"];
+    if (doneStatuses.includes(newStatus) && !doneStatuses.includes(oldStatus)) {
+      task.movedToDoneAt = new Date().toISOString();
+    }
+
+    this.saveTasks();
+    this.render();
 
     // Отправляем уведомление о перемещении
-    if (oldStatus !== newStatus) {
-        this.trackTaskMovement(taskId, oldStatus, newStatus)
+    if (oldStatus !== newStatus || oldParentId !== task.parentId) {
+      this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
-}
+  }
 
   getDragAfterElement(container, y) {
     const draggableElements = [...container.querySelectorAll(".task-card:not(.dragging)")]
@@ -740,36 +1079,52 @@ handleEditTask(e) {
   }
 
   checkAndRemoveOldTasks() {
-    const now = new Date()
-    const threeDaysAgo = new Date(now)
-    threeDaysAgo.setDate(now.getDate() - 3)
+    const now = new Date();
+    const threeDaysAgo = new Date(now);
+    threeDaysAgo.setDate(now.getDate() - 3);
 
-    let tasksRemoved = false
+    let tasksRemoved = false;
+    const doneStatuses = ["done", "готово", "completed", "finished"];
 
     this.tasks = this.tasks.filter(task => {
-        if (task.status === "done") { // 👈 если статус "done" — проверяем дату
-            const createdAt = new Date(task.createdAt)
-            if (createdAt < threeDaysAgo) {
-                tasksRemoved = true
-                return false // удаляем задачу
-            }
+      if (doneStatuses.includes(task.status)) {
+        // Используем дату перемещения в "готово" или дату создания
+        const relevantDate = task.movedToDoneAt ?
+          new Date(task.movedToDoneAt) :
+          new Date(task.createdAt);
+
+        if (relevantDate < threeDaysAgo) {
+          console.log(`🗑️ Removing task: "${task.title}" (in done since: ${relevantDate.toLocaleDateString()})`);
+          tasksRemoved = true;
+          return false;
         }
-        return true // оставляем задачу
-    })
+      }
+      return true;
+    });
 
     if (tasksRemoved) {
-        this.saveTasks()
-        this.render()
+      this.saveTasks();
+      this.render();
+      console.log(`✅ Removed ${tasksRemoved} old tasks from done column`);
     }
-}
-}
+  }
 
-
+}
 
 // Initialize the application
-let kanban
+let kanban;
+let initializationCount = 0;
+
 document.addEventListener("DOMContentLoaded", () => {
-  kanban = new KanbanBoard()
-})
+  initializationCount++;
+  console.log(`🏗️ DOMContentLoaded #${initializationCount}, creating KanbanBoard...`);
 
+  if (window.kanban) {
+    console.log('⚠️ WARNING: kanban already exists in window!');
+  }
 
+  kanban = new KanbanBoard();
+  window.kanban = kanban;
+
+  console.log('✅ KanbanBoard created');
+});

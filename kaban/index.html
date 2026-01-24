@@ -1,5 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+<script>
+// Конфигурация WebSocket URL
+window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
+
+// Или для локальной разработки:
+// window.KANBAN_WS_URL = 'ws://localhost:8080';
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +15,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 </head>
 <body>
     <div class="app">
@@ -17,6 +26,10 @@
                 <button class="btn btn-outline" id="add-column-btn">
                     <i data-lucide="columns"></i>
                     Новая колонка
+                </button>
+                <button class="btn btn-outline" id="manage-labels-btn">
+                    <i data-lucide="tag"></i>
+                    Метки
                 </button>
                 <button class="btn btn-primary" id="add-task-btn">
                     <i data-lucide="plus"></i>
@@ -59,8 +72,11 @@
                     </select>
                 </div>
                 <div class="form-group">
-                   <label for="task-label">Метка (для какой задачи)</label>
-                   <input type="text" id="task-label" name="label" placeholder="Например: Проект Х, Баг, Фича...">
+                   <label for="task-label">Метка (тайтл)</label>
+                   <select id="task-label" name="label">
+                       <option value="">Без метки</option>
+                       <!-- Options will be populated dynamically -->
+                   </select>
                 </div>
                 <div class="form-group">
                     <label for="task-status">Колонка</label>
@@ -106,6 +122,13 @@
             <div class="form-group">
                 <label for="edit-task-status">Колонка</label>
                 <select id="edit-task-status" name="status">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="edit-task-label">Метка (тайтл)</label>
+                <select id="edit-task-label" name="label">
+                    <option value="">Без метки</option>
                     <!-- Options will be populated dynamically -->
                 </select>
             </div>
@@ -161,8 +184,37 @@
         </div>
     </div>
 
+    <!-- Manage Labels Modal -->
+    <div class="modal" id="labels-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Управление метками (Тайтлами)</h2>
+                <button class="modal-close" id="close-labels-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="labels-list" id="labels-list">
+                    <!-- Labels will be listed here -->
+                </div>
+                <div class="form-group">
+                    <label>Добавить новую метку</label>
+                    <div class="input-with-button">
+                        <input type="text" id="new-label-name" placeholder="Название метки...">
+                        <button type="button" class="btn btn-primary" id="add-label-btn">
+                            <i data-lucide="plus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="close-labels-btn">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
-    <script src="js/kanban.js"></script>
+    <script type="module" src="js/kanban.js"></script>
 </body>
 </html>
 <script>
