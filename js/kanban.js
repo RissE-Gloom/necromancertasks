@@ -553,6 +553,39 @@ class KanbanBoard {
         document.querySelectorAll(".dropdown.open").forEach((d) => d.classList.remove("open"))
       }
 
+      // Редактирование задачи
+      if (e.target.closest('.edit-task-btn')) {
+        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
+        this.openEditTaskModal(taskId);
+      }
+
+      // Удаление задачи
+      if (e.target.closest('.delete-task-btn')) {
+        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
+        this.deleteTask(taskId);
+      }
+
+      // Перемещение задачи
+      if (e.target.closest('.move-task-btn')) {
+        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
+        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
+        this.updateTaskStatus(taskId, targetStatus);
+      }
+
+      // Разворачивание подзадач
+      const expandToggle = e.target.closest('.expand-toggle');
+      if (expandToggle) {
+        e.stopPropagation(); // Чтобы не драггалось
+        this.toggleTaskExpand(expandToggle.dataset.taskId);
+      }
+
+      // Клик по телу колонки для создания задачи
+      // Проверяем, что клик по .column-content и НЕ по интерактивным элементам внутри
+      if (e.target.classList.contains('column-content')) {
+        const status = e.target.dataset.status;
+        this.openAddTaskModal(status);
+      }
+
       if (e.target.classList.contains("modal")) {
         this.closeModal(e.target.id)
       }
@@ -595,8 +628,8 @@ class KanbanBoard {
   }
 
   // Modal Management
-  openAddTaskModal() {
-    this.populateStatusOptions()
+  openAddTaskModal(preselectedStatus = null) {
+    this.populateStatusOptions(preselectedStatus)
     this.openModal("add-task-modal")
   }
 
@@ -626,7 +659,7 @@ class KanbanBoard {
     this.currentEditingColumn = null
   }
 
-  populateStatusOptions() {
+  populateStatusOptions(preselectedStatus = null) {
     const select = document.getElementById("task-status")
     select.innerHTML = ""
 
@@ -634,6 +667,9 @@ class KanbanBoard {
       const option = document.createElement("option")
       option.value = column.status
       option.textContent = column.title
+      if (preselectedStatus && column.status === preselectedStatus) {
+        option.selected = true
+      }
       select.appendChild(option)
     })
   }
@@ -850,35 +886,6 @@ class KanbanBoard {
         const status = e.target.closest('.delete-column-btn').dataset.status;
         this.deleteColumn(status);
       });
-    });
-
-    // Обработчики для кнопок задач (делегирование событий)
-    document.addEventListener('click', (e) => {
-      // Редактирование задачи
-      if (e.target.closest('.edit-task-btn')) {
-        const taskId = e.target.closest('.edit-task-btn').dataset.taskId;
-        this.openEditTaskModal(taskId);
-      }
-
-      // Удаление задачи
-      if (e.target.closest('.delete-task-btn')) {
-        const taskId = e.target.closest('.delete-task-btn').dataset.taskId;
-        this.deleteTask(taskId);
-      }
-
-      // Перемещение задачи
-      if (e.target.closest('.move-task-btn')) {
-        const taskId = e.target.closest('.move-task-btn').dataset.taskId;
-        const targetStatus = e.target.closest('.move-task-btn').dataset.targetStatus;
-        this.updateTaskStatus(taskId, targetStatus);
-      }
-
-      // Разворачивание подзадач
-      const expandToggle = e.target.closest('.expand-toggle');
-      if (expandToggle) {
-        e.stopPropagation(); // Чтобы не драггалось
-        this.toggleTaskExpand(expandToggle.dataset.taskId);
-      }
     });
   }
 
