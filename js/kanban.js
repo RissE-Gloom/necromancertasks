@@ -822,11 +822,6 @@ class KanbanBoard {
     return `
             <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''} ${task.parentId ? 'subtask' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
-                    ${hasSubtasks ? `
-                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
-                            <i data-lucide="chevron-right"></i>
-                        </button>
-                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -857,15 +852,24 @@ class KanbanBoard {
                     </div>
                 </div>
                 ${task.description ? `<p class="task-description">${task.description}</p>` : ""}
-                <div class="task-footer">
-                    <span class="task-priority priority-${task.priority}">${task.priority}</span>
-                    ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
-                </div>
+                
                 ${isExpanded && hasSubtasks ? `
                     <div class="subtasks-container">
                         ${subtasks.map(st => this.createTaskElement(st)).join('')}
                     </div>
                 ` : ''}
+
+                <div class="task-footer">
+                    <div class="footer-meta">
+                        <span class="task-priority priority-${task.priority}">${task.priority}</span>
+                        ${task.label ? `<span class="task-label">${task.label}</span>` : ''}
+                    </div>
+                    ${hasSubtasks ? `
+                        <button class="expand-toggle text-btn ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
+                            ${isExpanded ? 'Свернуть' : 'Раскрыть'}
+                        </button>
+                    ` : ''}
+                </div>
             </div>
         `
   }
