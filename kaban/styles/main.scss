@@ -1,0 +1,674 @@
+// Variables
+$primary-color: #3b82f6;
+$primary-hover: #2563eb;
+$secondary-color: #6b7280;
+$accent-color: #10b981;
+$danger-color: #ef4444;
+$warning-color: #f59e0b;
+
+$background-color: #f8fafc;
+$surface-color: #ffffff;
+$border-color: #e2e8f0;
+$text-primary: #1e293b;
+$text-secondary: #64748b;
+$text-muted: #94a3b8;
+
+$shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+$shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+$shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+$border-radius: 8px;
+$border-radius-sm: 4px;
+$border-radius-lg: 12px;
+
+$spacing-xs: 0.25rem;
+$spacing-sm: 0.5rem;
+$spacing-md: 1rem;
+$spacing-lg: 1.5rem;
+$spacing-xl: 2rem;
+$spacing-2xl: 3rem;
+
+// Breakpoints
+$mobile: 768px;
+$tablet: 1024px;
+$desktop: 1280px;
+
+// Reset and Base Styles
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: $background-color;
+  color: $text-primary;
+  line-height: 1.6;
+  font-size: 14px;
+  overflow-x: hidden;
+
+  &.modal-open {
+    overflow: hidden;
+  }
+}
+
+// App Layout
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: $surface-color;
+  border-bottom: 1px solid $border-color;
+  padding: $spacing-lg $spacing-md;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: $shadow-sm;
+
+  @media (max-width: $mobile) {
+    padding: $spacing-md;
+    flex-direction: column;
+    gap: $spacing-md;
+  }
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+
+  @media (max-width: $mobile) {
+    font-size: 1.25rem;
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: $spacing-sm;
+
+  @media (max-width: $mobile) {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+// Main Content
+.kanban-container {
+  flex: 1;
+  padding: $spacing-xl $spacing-md;
+  overflow-x: auto;
+
+  @media (max-width: $mobile) {
+    padding: $spacing-lg $spacing-sm;
+  }
+}
+
+.columns-wrapper {
+  display: flex;
+  gap: $spacing-lg;
+  min-width: fit-content;
+  justify-content: center;
+
+  @media (max-width: $mobile) {
+    flex-direction: column;
+    gap: $spacing-md;
+    min-width: auto;
+  }
+
+  @media (min-width: $mobile) and (max-width: $tablet) {
+    justify-content: flex-start;
+  }
+}
+
+// Kanban Columns
+.kanban-column {
+  background: $surface-color;
+  border-radius: $border-radius-lg;
+  border: 1px solid $border-color;
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: $shadow-sm;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+
+  @media (max-width: $mobile) {
+    width: 100%;
+  }
+}
+
+.column-header {
+  padding: $spacing-lg;
+  border-bottom: 1px solid $border-color;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, $surface-color 0%, #f1f5f9 100%);
+  border-radius: $border-radius-lg $border-radius-lg 0 0;
+}
+
+.column-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.column-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+}
+
+.task-count {
+  background: $primary-color;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: 12px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.column-actions {
+  display: flex;
+  gap: $spacing-xs;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+
+  .kanban-column:hover & {
+    opacity: 1;
+  }
+}
+
+.column-content {
+  flex: 1;
+  padding: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  min-height: 200px;
+  transition: background-color 0.2s ease;
+
+  &.drag-over {
+    background-color: #f0f9ff;
+    border: 2px dashed $primary-color;
+    border-radius: $border-radius;
+  }
+}
+
+// Task Cards
+.task-card {
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius;
+  padding: $spacing-md;
+  cursor: grab;
+  transition: all 0.2s ease;
+  box-shadow: $shadow-sm;
+
+  &:hover {
+    box-shadow: $shadow-md;
+    transform: translateY(-1px);
+  }
+
+  &.dragging {
+    opacity: 0.5;
+    transform: rotate(5deg);
+    cursor: grabbing;
+  }
+
+  &.priority-high {
+    border-left: 4px solid $danger-color;
+  }
+
+  &.priority-medium {
+    border-left: 4px solid $warning-color;
+  }
+
+  &.priority-low {
+    border-left: 4px solid $accent-color;
+  }
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $spacing-sm;
+}
+
+.task-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $text-primary;
+  margin: 0;
+  line-height: 1.4;
+  flex: 1;
+  margin-right: $spacing-sm;
+}
+
+.task-actions {
+  position: relative;
+}
+
+.task-description {
+  font-size: 0.8rem;
+  color: $text-secondary;
+  margin: 0 0 $spacing-sm 0;
+  line-height: 1.5;
+}
+
+.task-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: $spacing-sm;
+}
+
+.task-priority {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $border-radius-sm;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  &.priority-high {
+    background: rgba($danger-color, 0.1);
+    color: $danger-color;
+  }
+
+  &.priority-medium {
+    background: rgba($warning-color, 0.1);
+    color: $warning-color;
+  }
+
+  &.priority-low {
+    background: rgba($accent-color, 0.1);
+    color: $accent-color;
+  }
+}
+
+// Buttons
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  border-radius: $border-radius;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  gap: $spacing-xs;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.btn-primary {
+    background: $primary-color;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: $primary-hover;
+      transform: translateY(-1px);
+      box-shadow: $shadow-md;
+    }
+  }
+
+  &.btn-outline {
+    background: transparent;
+    color: $text-secondary;
+    border: 1px solid $border-color;
+
+    &:hover:not(:disabled) {
+      background: $surface-color;
+      border-color: $primary-color;
+      color: $primary-color;
+      box-shadow: $shadow-sm;
+    }
+  }
+
+  &.btn-danger {
+    background: $danger-color;
+    color: white;
+
+    &:hover:not(:disabled) {
+      background: darken($danger-color, 10%);
+    }
+  }
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: $border-radius;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: $text-muted;
+
+  &:hover {
+    background: rgba($primary-color, 0.1);
+    color: $primary-color;
+  }
+
+  i {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// Dropdowns
+.dropdown {
+  position: relative;
+
+  &.open .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: $surface-color;
+  border: 1px solid $border-color;
+  border-radius: $border-radius;
+  box-shadow: $shadow-lg;
+  min-width: 160px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: none;
+  background: none;
+  color: $text-secondary;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($primary-color, 0.05);
+    color: $primary-color;
+  }
+
+  &.delete {
+    color: $danger-color;
+
+    &:hover {
+      background: rgba($danger-color, 0.05);
+      color: $danger-color;
+    }
+  }
+
+  i {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+// Modals
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  padding: $spacing-md;
+
+  &.active {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.modal-content {
+  background: $surface-color;
+  border-radius: $border-radius-lg;
+  box-shadow: $shadow-lg;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+
+  .modal.active & {
+    transform: scale(1);
+  }
+
+  @media (max-width: $mobile) {
+    max-width: 100%;
+    margin: $spacing-md;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: $spacing-lg;
+  border-bottom: 1px solid $border-color;
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0;
+  }
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: $text-muted;
+  padding: $spacing-xs;
+  border-radius: $border-radius;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba($danger-color, 0.1);
+    color: $danger-color;
+  }
+
+  i {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.modal-body {
+  padding: $spacing-lg;
+}
+
+.modal-actions {
+  display: flex;
+  gap: $spacing-sm;
+  justify-content: flex-end;
+  margin-top: $spacing-lg;
+
+  @media (max-width: $mobile) {
+    flex-direction: column-reverse;
+  }
+}
+
+// Forms
+.form-group {
+  margin-bottom: $spacing-lg;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: $text-primary;
+  margin-bottom: $spacing-xs;
+}
+
+input[type="text"],
+input[type="email"],
+textarea,
+select {
+  width: 100%;
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid $border-color;
+  border-radius: $border-radius;
+  font-size: 0.875rem;
+  color: $text-primary;
+  background: $surface-color;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: $primary-color;
+    box-shadow: 0 0 0 3px rgba($primary-color, 0.1);
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+select {
+  cursor: pointer;
+}
+
+// Animations
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.task-card {
+  animation: slideInUp 0.3s ease;
+}
+
+.kanban-column {
+  animation: fadeIn 0.5s ease;
+}
+
+// Responsive Design
+@media (max-width: $mobile) {
+  .columns-wrapper {
+    padding-bottom: $spacing-xl;
+  }
+
+  .task-card {
+    &:active {
+      transform: scale(1.02);
+    }
+  }
+
+  .modal-actions {
+    .btn {
+      flex: 1;
+    }
+  }
+}
+
+// Print Styles
+@media print {
+  .header-actions,
+  .column-actions,
+  .task-actions,
+  .modal {
+    display: none !important;
+  }
+
+  .app {
+    background: white;
+  }
+
+  .kanban-column {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
+
+// High Contrast Mode
+@media (prefers-contrast: high) {
+  .task-card {
+    border-width: 2px;
+  }
+
+  .btn-outline {
+    border-width: 2px;
+  }
+}
+
+// Reduced Motion
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

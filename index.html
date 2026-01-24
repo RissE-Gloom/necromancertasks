@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<script>
+// Конфигурация WebSocket URL
+window.KANBAN_WS_URL = 'wss://necromancertasks.onrender.com';
+
+// Или для локальной разработки:
+// window.KANBAN_WS_URL = 'ws://localhost:8080';
+</script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Task Board</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body>
+    <div class="app">
+        <header class="app-header">
+            <h1 class="app-title">Кабан</h1>
+            <div class="header-actions">
+                <button class="btn btn-outline" id="add-column-btn">
+                    <i data-lucide="columns"></i>
+                    Новая колонка
+                </button>
+                <button class="btn btn-outline" id="manage-labels-btn">
+                    <i data-lucide="tag"></i>
+                    Метки
+                </button>
+                <button class="btn btn-primary" id="add-task-btn">
+                    <i data-lucide="plus"></i>
+                    Новая карточка
+                </button>
+            </div>
+        </header>
+
+        <main class="kanban-container">
+            <div class="columns-wrapper" id="columns-wrapper">
+                <!-- Columns will be dynamically generated here -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Task Modal -->
+    <div class="modal" id="add-task-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Новая карточка</h2>
+                <button class="modal-close" id="close-task-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="add-task-form">
+                <div class="form-group">
+                    <label for="task-title">Название</label>
+                    <input type="text" id="task-title" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="task-description">Описание</label>
+                    <textarea id="task-description" name="description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="task-priority">Приоритет</label>
+                    <select id="task-priority" name="priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                   <label for="task-label">Метка (тайтл)</label>
+                   <select id="task-label" name="label">
+                       <option value="">Без метки</option>
+                       <!-- Options will be populated dynamically -->
+                   </select>
+                </div>
+                <div class="form-group">
+                    <label for="task-status">Колонка</label>
+                    <select id="task-status" name="status">
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="cancel-task">Закрыть</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Task Modal -->
+<div class="modal" id="edit-task-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Редактировать карточку</h2>
+            <button class="modal-close" id="close-edit-task-modal">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <form class="modal-body" id="edit-task-form">
+            <input type="hidden" id="edit-task-id" name="id">
+            <div class="form-group">
+                <label for="edit-task-title">Название</label>
+                <input type="text" id="edit-task-title" name="title" required>
+            </div>
+            <div class="form-group">
+                <label for="edit-task-description">Описание</label>
+                <textarea id="edit-task-description" name="description" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="edit-task-priority">Приоритет</label>
+                <select id="edit-task-priority" name="priority">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="edit-task-status">Колонка</label>
+                <select id="edit-task-status" name="status">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="edit-task-label">Метка (тайтл)</label>
+                <select id="edit-task-label" name="label">
+                    <option value="">Без метки</option>
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" id="cancel-edit-task">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <!-- Add Column Modal -->
+    <div class="modal" id="add-column-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Новая колонка</h2>
+                <button class="modal-close" id="close-column-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="add-column-form">
+                <div class="form-group">
+                    <label for="column-title">Название колонки</label>
+                    <input type="text" id="column-title" name="title" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="cancel-column">Назад</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Column Modal -->
+    <div class="modal" id="edit-column-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Редактировать колонку</h2>
+                <button class="modal-close" id="close-edit-column-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="edit-column-form">
+                <div class="form-group">
+                    <label for="edit-column-title">Название колонки</label>
+                    <input type="text" id="edit-column-title" name="title" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="cancel-edit-column">Закрыть</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Labels Modal -->
+    <div class="modal" id="labels-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Управление метками (Тайтлами)</h2>
+                <button class="modal-close" id="close-labels-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="labels-list" id="labels-list">
+                    <!-- Labels will be listed here -->
+                </div>
+                <div class="form-group">
+                    <label>Добавить новую метку</label>
+                    <div class="input-with-button">
+                        <input type="text" id="new-label-name" placeholder="Название метки...">
+                        <button type="button" class="btn btn-primary" id="add-label-btn">
+                            <i data-lucide="plus"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" id="close-labels-btn">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
+    <script type="module" src="js/kanban.js"></script>
+</body>
+</html>
+<script>
+  lucide.createIcons();
+</script>
