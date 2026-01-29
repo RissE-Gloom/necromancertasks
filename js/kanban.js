@@ -970,27 +970,6 @@ class KanbanBoard {
     if (columnContent && this.draggedTask) {
       const newStatus = columnContent.dataset.status
       this.updateTaskStatus(this.draggedTask, newStatus)
-
-      // Проверяем, было ли вложение
-      const nestTarget = e.target.closest('.task-card');
-      const isNestTarget = nestTarget && nestTarget.classList.contains('nest-zone-active');
-
-      if (isNestTarget) {
-        const parentId = nestTarget.dataset.taskId;
-        // Статус берем от родителя
-        const task = this.tasks.find(t => t.id === parentId);
-        const newStatus = task ? task.status : columnContent.dataset.status;
-
-        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
-
-        // Разворачиваем родителя, чтобы показать вложение
-        this.expandedTasks.add(parentId);
-      } else {
-        const newStatus = columnContent.dataset.status
-        this.updateTaskStatus(this.draggedTask, newStatus, null) // Explicitly null parentId for root tasks
-      }
-
->>>>>>> parent of 7bbe7bd (фикс)
       columnContent.classList.remove("drag-over")
     }
   }
