@@ -968,10 +968,9 @@ class KanbanBoard {
     const columnContent = e.target.closest(".column-content")
 
     if (columnContent && this.draggedTask) {
-<<<<<<< HEAD
       const newStatus = columnContent.dataset.status
       this.updateTaskStatus(this.draggedTask, newStatus)
-=======
+
       // Проверяем, было ли вложение
       const nestTarget = e.target.closest('.task-card');
       const isNestTarget = nestTarget && nestTarget.classList.contains('nest-zone-active');
