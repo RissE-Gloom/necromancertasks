@@ -13,6 +13,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kanban Task Board</title>
     <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/nesting.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -86,6 +87,13 @@
                         <!-- Options will be populated dynamically -->
                     </select>
                 </div>
+                <div class="form-group">
+                    <label for="task-parentId">Родительская карточка</label>
+                    <select id="task-parentId" name="parentId">
+                        <option value="">Без родителя (основная)</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-outline" id="cancel-task">Закрыть</button>
                     <button type="submit" class="btn btn-primary">Создать</button>
@@ -124,6 +132,13 @@
                 <div class="form-group">
                     <label for="edit-task-status">Колонка</label>
                     <select id="edit-task-status" name="status">
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-task-parentId">Родительская карточка</label>
+                    <select id="edit-task-parentId" name="parentId">
+                        <option value="">Без родителя (основная)</option>
                         <!-- Options will be populated dynamically -->
                     </select>
                 </div>

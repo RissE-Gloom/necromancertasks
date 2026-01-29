@@ -12,7 +12,7 @@ class KanbanBoard {
 
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
-    this.expandedTasks = new Set()
+    this.expandedTasks = this.loadExpandedTasks() // Use helper
     this.labels = this.loadLabels()
     this.currentEditingColumn = null
     this.lucide = window.lucide // Declare the lucide variable
@@ -320,6 +320,15 @@ class KanbanBoard {
     return saved ? JSON.parse(saved) : []
   }
 
+  loadExpandedTasks() {
+    const saved = localStorage.getItem("kanban-expanded")
+    return saved ? new Set(JSON.parse(saved)) : new Set()
+  }
+
+  saveExpandedTasks() {
+    localStorage.setItem("kanban-expanded", JSON.stringify([...this.expandedTasks]))
+  }
+
   async saveTasks() {
     if (this.isOnline) {
       const success = await this.firebase.saveTasks(this.tasks);
@@ -396,8 +405,18 @@ class KanbanBoard {
   }
 
   async deleteTask(taskId) {
-    if (confirm("Вы уверены, что хотите удалить эту задачу?")) {
-      this.tasks = this.tasks.filter((t) => t.id !== taskId);
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    if (confirm(`Вы уверены, что хотите удалить задачу "${task.title}"? Все подзадачи также будут удалены.`)) {
+      // Рекурсивное удаление
+      const deleteRecursive = (id) => {
+        const subtasks = this.tasks.filter(t => t.parentId === id);
+        subtasks.forEach(st => deleteRecursive(st.id));
+        this.tasks = this.tasks.filter(t => t.id !== id);
+      };
+
+      deleteRecursive(taskId);
       await this.saveTasks();
       this.render();
     }
@@ -414,6 +433,7 @@ class KanbanBoard {
     } else {
       this.expandedTasks.add(taskId);
     }
+    this.saveExpandedTasks(); // Save state
     this.render();
   }
 
@@ -466,6 +486,16 @@ class KanbanBoard {
   // Utility Methods
   generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2)
+  }
+
+  isDescendant(parentTaskId, potentialChildTaskId) {
+    // Проверка: является ли potentialChildTaskId потомком parentTaskId
+    let current = this.tasks.find(t => t.id === potentialChildTaskId);
+    while (current && current.parentId) {
+      if (current.parentId === parentTaskId) return true;
+      current = this.tasks.find(t => t.id === current.parentId);
+    }
+    return false;
   }
 
   // Event Listeners
@@ -630,6 +660,7 @@ class KanbanBoard {
   // Modal Management
   openAddTaskModal(preselectedStatus = null) {
     this.populateStatusOptions(preselectedStatus)
+    this.populateParentOptions("task-parentId")
     this.openModal("add-task-modal")
   }
 
@@ -674,6 +705,26 @@ class KanbanBoard {
     })
   }
 
+  populateParentOptions(selectId, excludeTaskId = null) {
+    const select = document.getElementById(selectId)
+    if (!select) return
+
+    const currentValue = select.value
+    select.innerHTML = '<option value="">Без родителя (основная)</option>'
+
+    // Берем только корневые задачи, чтобы не плодить бесконечную вложенность
+    // (Или можно разрешить всем, кто не является текущей задачей или её потомком)
+    this.tasks
+      .filter(t => t.id !== excludeTaskId && !t.parentId)
+      .forEach(task => {
+        const option = document.createElement("option")
+        option.value = task.id
+        option.textContent = task.title
+        if (currentValue === task.id) option.selected = true
+        select.appendChild(option)
+      })
+  }
+
   // Form Handlers
   handleAddTask(e) {
     const formData = new FormData(e.target)
@@ -682,7 +733,8 @@ class KanbanBoard {
       description: formData.get("description"),
       priority: formData.get("priority"),
       status: formData.get("status"),
-      label: formData.get("label") || "", // 👈 Добавляем метку (если пусто — пустая строка)
+      label: formData.get("label") || "",
+      parentId: formData.get("parentId") || null
     }
 
     this.addTask(taskData)
@@ -699,7 +751,12 @@ class KanbanBoard {
     document.getElementById("edit-task-priority").value = task.priority
     document.getElementById("edit-task-status").value = task.status
 
+    // Устанавливаем текущего родителя в селекте
+    const parentSelect = document.getElementById("edit-task-parentId");
+    if (parentSelect) parentSelect.value = task.parentId || "";
+
     this.populateEditStatusOptions()
+    this.populateParentOptions("edit-task-parentId", taskId)
     this.openModal("edit-task-modal")
   }
 
@@ -722,7 +779,8 @@ class KanbanBoard {
       title: formData.get("title"),
       description: formData.get("description"),
       priority: formData.get("priority"),
-      status: formData.get("status")
+      status: formData.get("status"),
+      parentId: formData.get("parentId") || null
     }
 
     const taskIndex = this.tasks.findIndex(t => t.id === taskId)
@@ -822,6 +880,11 @@ class KanbanBoard {
     return `
             <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''} ${task.parentId ? 'subtask' : ''}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
+                    ${hasSubtasks ? `
+                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -852,24 +915,15 @@ class KanbanBoard {
                     </div>
                 </div>
                 ${task.description ? `<p class="task-description">${task.description}</p>` : ""}
-                
+                <div class="task-footer">
+                    <span class="task-priority priority-${task.priority}">${task.priority}</span>
+                    ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
+                </div>
                 ${isExpanded && hasSubtasks ? `
                     <div class="subtasks-container">
                         ${subtasks.map(st => this.createTaskElement(st)).join('')}
                     </div>
                 ` : ''}
-
-                <div class="task-footer">
-                    <div class="footer-meta">
-                        <span class="task-priority priority-${task.priority}">${task.priority}</span>
-                        ${task.label ? `<span class="task-label">${task.label}</span>` : ''}
-                    </div>
-                    ${hasSubtasks ? `
-                        <button class="expand-toggle text-btn ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
-                            ${isExpanded ? 'Свернуть' : 'Раскрыть'}
-                        </button>
-                    ` : ''}
-                </div>
             </div>
         `
   }
@@ -951,9 +1005,12 @@ class KanbanBoard {
 
       // "Зона вкладывания" - центральные 50% карточки
       if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
-        taskCard.classList.add('drop-target-nest');
-        e.dataTransfer.dropEffect = "copy"; // Визуальный индикатор вкладывания
-        return;
+        // Проверка на зацикливание: нельзя вложить в самого себя или в своего потомка
+        if (taskCard.dataset.taskId !== this.draggedTask && !this.isDescendant(this.draggedTask, taskCard.dataset.taskId)) {
+          taskCard.classList.add('drop-target-nest');
+          e.dataTransfer.dropEffect = "copy";
+          return;
+        }
       }
     }
 

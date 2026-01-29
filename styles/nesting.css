@@ -1,0 +1,62 @@
+/* styles/nesting.css */
+
+/* Контейнер для подзадач внутри основной карточки */
+.subtasks-container {
+    margin-left: 1.25rem;
+    margin-top: 0.75rem;
+    padding-left: 0.75rem;
+    border-left: 2px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Стили вложенной карточки */
+.task-card.subtask {
+    padding: 0.75rem;
+    font-size: 0.9em;
+    box-shadow: none;
+    background-color: #f8fafc;
+    border-style: dashed;
+}
+
+/* Кнопка развертывания/свертывания */
+.expand-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    margin-right: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+    color: #64748b;
+    border-radius: 4px;
+}
+
+.expand-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.expand-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.expand-toggle i, .expand-toggle svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Визуальная индикация зоны вложения при перетаскивании */
+.drop-target-nest {
+    outline: 2px dashed #3b82f6 !important;
+    outline-offset: -2px;
+    background-color: rgba(59, 130, 246, 0.08) !important;
+    transform: scale(1.02);
+}
+
+/* Специфичное поведение для карточек с детьми */
+.task-card.has-children {
+    border-bottom: 2px solid #3b82f633;
+}
