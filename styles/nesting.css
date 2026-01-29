@@ -1,19 +1,5 @@
 /* styles/nesting.css */
 
-/* КРИТИЧЕСКИ ВАЖНО: убираем ВСЕ псевдоэлементы со ВСЕХ карточек */
-.task-card::after,
-.task-card::before,
-.task-card *::after,
-.task-card *::before,
-.nest-zone-active::after,
-.nest-zone-active::before,
-.drop-target-nest::after,
-.drop-target-nest::before {
-    content: none !important;
-    display: none !important;
-    visibility: hidden !important;
-}
-
 /* Контейнер для подзадач внутри основной карточки */
 .subtasks-container {
     margin-left: 1rem;
@@ -25,7 +11,7 @@
     gap: 0.75rem;
 }
 
-/* Стили вложенной карточки - просто немного меньше */
+/* Стили вложенной карточки - просто немного меньше и с отступом */
 .task-card.subtask {
     padding: 0.75rem;
     font-size: 0.95em;
@@ -55,19 +41,30 @@
     transform: rotate(90deg);
 }
 
-/* Зона вложения при перетаскивании - НИКАКИХ визуальных эффектов */
+/* Зона вложения при перетаскивании - НИКАКИХ рамок и фонов */
 .nest-zone-active {
+    /* Полностью убираем визуальную индикацию */
     outline: none !important;
     background-color: transparent !important;
     transform: none !important;
     box-shadow: none !important;
 }
 
-/* Полностью убираем старый класс */
-.drop-target-nest {
+/* Убираем все старые стили */
+.drop-target-nest,
+.drop-target-nest::after,
+.drop-target-nest::before {
     content: none !important;
-    display: block !important;
+    display: none !important;
     background: transparent !important;
     outline: none !important;
-    box-shadow: none !important;
+}
+
+/* Убираем любые псевдоэлементы с текстом */
+.task-card::after,
+.task-card::before,
+.nest-zone-active::after,
+.nest-zone-active::before {
+    content: none !important;
+    display: none !important;
 }
