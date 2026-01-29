@@ -12,7 +12,6 @@ class KanbanBoard {
 
     this.tasks = this.loadTasks()
     this.columns = this.loadColumns()
-    this.expandedTasks = this.loadExpandedTasks() // Use helper
     this.labels = this.loadLabels()
     this.currentEditingColumn = null
     this.lucide = window.lucide // Declare the lucide variable
@@ -320,14 +319,6 @@ class KanbanBoard {
     return saved ? JSON.parse(saved) : []
   }
 
-  loadExpandedTasks() {
-    const saved = localStorage.getItem("kanban-expanded")
-    return saved ? new Set(JSON.parse(saved)) : new Set()
-  }
-
-  saveExpandedTasks() {
-    localStorage.setItem("kanban-expanded", JSON.stringify([...this.expandedTasks]))
-  }
 
   async saveTasks() {
     if (this.isOnline) {
@@ -377,13 +368,8 @@ class KanbanBoard {
       status: taskData.status,
       priority: taskData.priority,
       label: taskData.label || '',
-      parentId: taskData.parentId || null,
       createdAt: new Date().toISOString(),
     };
-
-    if (task.parentId) {
-      this.expandedTasks.add(task.parentId);
-    }
 
     this.tasks.push(task);
     await this.saveTasks();
@@ -405,18 +391,8 @@ class KanbanBoard {
   }
 
   async deleteTask(taskId) {
-    const task = this.tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    if (confirm(`Вы уверены, что хотите удалить задачу "${task.title}"? Все подзадачи также будут удалены.`)) {
-      // Рекурсивное удаление
-      const deleteRecursive = (id) => {
-        const subtasks = this.tasks.filter(t => t.parentId === id);
-        subtasks.forEach(st => deleteRecursive(st.id));
-        this.tasks = this.tasks.filter(t => t.id !== id);
-      };
-
-      deleteRecursive(taskId);
+    if (confirm("Вы уверены, что хотите удалить эту задачу?")) {
+      this.tasks = this.tasks.filter((t) => t.id !== taskId);
       await this.saveTasks();
       this.render();
     }
@@ -427,15 +403,6 @@ class KanbanBoard {
     return this.tasks.filter((task) => task.status === status && !task.parentId)
   }
 
-  toggleTaskExpand(taskId) {
-    if (this.expandedTasks.has(taskId)) {
-      this.expandedTasks.delete(taskId);
-    } else {
-      this.expandedTasks.add(taskId);
-    }
-    this.saveExpandedTasks(); // Save state
-    this.render();
-  }
 
   // Column Management
   async addColumn(title) {
@@ -486,16 +453,6 @@ class KanbanBoard {
   // Utility Methods
   generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2)
-  }
-
-  isDescendant(parentTaskId, potentialChildTaskId) {
-    // Проверка: является ли potentialChildTaskId потомком parentTaskId
-    let current = this.tasks.find(t => t.id === potentialChildTaskId);
-    while (current && current.parentId) {
-      if (current.parentId === parentTaskId) return true;
-      current = this.tasks.find(t => t.id === current.parentId);
-    }
-    return false;
   }
 
   // Event Listeners
@@ -733,8 +690,7 @@ class KanbanBoard {
       description: formData.get("description"),
       priority: formData.get("priority"),
       status: formData.get("status"),
-      label: formData.get("label") || "",
-      parentId: formData.get("parentId") || null
+      label: formData.get("label") || ""
     }
 
     this.addTask(taskData)
@@ -872,19 +828,10 @@ class KanbanBoard {
 
   createTaskElement(task) {
     const priorityClass = `priority-${task.priority}`;
-    // Фильтруем подзадачи для текущей задачи
-    const subtasks = this.tasks.filter(t => t.parentId === task.id);
-    const hasSubtasks = subtasks.length > 0;
-    const isExpanded = this.expandedTasks.has(task.id);
 
     return `
-            <div class="task-card ${priorityClass} ${hasSubtasks ? 'has-children' : ''} ${task.parentId ? 'subtask' : ''}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
-                    ${hasSubtasks ? `
-                        <button class="expand-toggle ${isExpanded ? 'expanded' : ''}" data-task-id="${task.id}">
-                            <i data-lucide="chevron-right"></i>
-                        </button>
-                    ` : ''}
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
                         <div class="dropdown">
@@ -919,11 +866,6 @@ class KanbanBoard {
                     <span class="task-priority priority-${task.priority}">${task.priority}</span>
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
-                ${isExpanded && hasSubtasks ? `
-                    <div class="subtasks-container">
-                        ${subtasks.map(st => this.createTaskElement(st)).join('')}
-                    </div>
-                ` : ''}
             </div>
         `
   }
@@ -994,35 +936,9 @@ class KanbanBoard {
     e.dataTransfer.dropEffect = "move"
 
     const columnContent = e.target.closest(".column-content")
-    const taskCard = e.target.closest(".task-card")
-
-    // Снимаем старые выделения вложенности
-    document.querySelectorAll('.nest-zone-active').forEach(el => el.classList.remove('nest-zone-active'));
-
-    if (taskCard && taskCard.dataset.taskId !== this.draggedTask) {
-      const rect = taskCard.getBoundingClientRect();
-      const relativeY = e.clientY - rect.top;
-
-      // "Зона вкладывания" - центральные 50% карточки
-      if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
-        // Проверка на зацикливание: нельзя вложить в самого себя или в своего потомка
-        if (taskCard.dataset.taskId !== this.draggedTask && !this.isDescendant(this.draggedTask, taskCard.dataset.taskId)) {
-          taskCard.classList.add('nest-zone-active');
-          e.dataTransfer.dropEffect = "copy";
-          return;
-        }
-      }
-    }
 
     if (columnContent && this.draggedTask) {
       const draggingElement = document.querySelector(".dragging")
-
-      // Проверка наведения на задачу (для вкладывания)
-      const targetTask = e.target.closest(".task-card");
-      if (targetTask && targetTask.dataset.taskId !== this.draggedTask) {
-        // Логика определения зоны вкладывания уже есть в начале метода?
-        // Нет, в оригинале она была, но нужно удостовериться
-      }
 
       const afterElement = this.getDragAfterElement(columnContent, e.clientY)
 
@@ -1049,34 +965,12 @@ class KanbanBoard {
   }
 
   handleDrop(e) {
-    console.log('🖱️ Drop event triggered');
     const columnContent = e.target.closest(".column-content")
-    console.log('Column content:', columnContent);
-    console.log('Dragged task:', this.draggedTask);
 
     if (columnContent && this.draggedTask) {
-      // Проверяем, было ли вложение
-      const nestTarget = e.target.closest('.task-card');
-      const isNestTarget = nestTarget && nestTarget.classList.contains('nest-zone-active');
-
-      if (isNestTarget) {
-        const parentId = nestTarget.dataset.taskId;
-        // Статус берем от родителя
-        const task = this.tasks.find(t => t.id === parentId);
-        const newStatus = task ? task.status : columnContent.dataset.status;
-
-        this.updateTaskStatus(this.draggedTask, newStatus, parentId);
-
-        // Разворачиваем родителя, чтобы показать вложение
-        this.expandedTasks.add(parentId);
-        this.saveExpandedTasks();
-      } else {
-        const newStatus = columnContent.dataset.status
-        this.updateTaskStatus(this.draggedTask, newStatus, null) // Explicitly null parentId for root tasks
-      }
-
+      const newStatus = columnContent.dataset.status
+      this.updateTaskStatus(this.draggedTask, newStatus)
       columnContent.classList.remove("drag-over")
-      document.querySelectorAll('.nest-zone-active').forEach(el => el.classList.remove('nest-zone-active'));
     }
   }
 
@@ -1094,19 +988,13 @@ class KanbanBoard {
     this.draggedElement = null
   }
 
-  updateTaskStatus(taskId, newStatus, newParentId = undefined) {
+  updateTaskStatus(taskId, newStatus) {
     const task = this.tasks.find(t => t.id === taskId);
     if (!task) return;
 
     const oldStatus = task.status;
-    const oldParentId = task.parentId;
 
     task.status = newStatus;
-    if (newParentId !== undefined) {
-      // Проверка на зацикливание (нельзя вложить родителя в своего потомка)
-      if (newParentId === taskId) return;
-      task.parentId = newParentId;
-    }
 
     // Если задача перемещена в колонку "готово" - запоминаем дату
     const doneStatuses = ["done", "готово", "completed", "finished"];
@@ -1118,8 +1006,8 @@ class KanbanBoard {
     this.saveTasks();
     this.render();
 
-    // Отправляем уведомление, если статус или родитель изменился
-    if (oldStatus !== newStatus || oldParentId !== task.parentId) {
+    // Отправляем уведомление, если статус изменился
+    if (oldStatus !== newStatus) {
       this.trackTaskMovement(taskId, oldStatus, newStatus);
     }
   }
