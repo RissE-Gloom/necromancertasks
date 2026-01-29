@@ -997,7 +997,7 @@ class KanbanBoard {
     const taskCard = e.target.closest(".task-card")
 
     // Снимаем старые выделения вложенности
-    document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
+    document.querySelectorAll('.nest-zone-active').forEach(el => el.classList.remove('nest-zone-active'));
 
     if (taskCard && taskCard.dataset.taskId !== this.draggedTask) {
       const rect = taskCard.getBoundingClientRect();
@@ -1007,7 +1007,7 @@ class KanbanBoard {
       if (relativeY > rect.height * 0.25 && relativeY < rect.height * 0.75) {
         // Проверка на зацикливание: нельзя вложить в самого себя или в своего потомка
         if (taskCard.dataset.taskId !== this.draggedTask && !this.isDescendant(this.draggedTask, taskCard.dataset.taskId)) {
-          taskCard.classList.add('drop-target-nest');
+          taskCard.classList.add('nest-zone-active');
           e.dataTransfer.dropEffect = "copy";
           return;
         }
@@ -1057,7 +1057,7 @@ class KanbanBoard {
     if (columnContent && this.draggedTask) {
       // Проверяем, было ли вложение
       const nestTarget = e.target.closest('.task-card');
-      const isNestTarget = nestTarget && nestTarget.classList.contains('drop-target-nest');
+      const isNestTarget = nestTarget && nestTarget.classList.contains('nest-zone-active');
 
       if (isNestTarget) {
         const parentId = nestTarget.dataset.taskId;
@@ -1075,7 +1075,7 @@ class KanbanBoard {
       }
 
       columnContent.classList.remove("drag-over")
-      document.querySelectorAll('.drop-target-nest').forEach(el => el.classList.remove('drop-target-nest'));
+      document.querySelectorAll('.nest-zone-active').forEach(el => el.classList.remove('nest-zone-active'));
     }
   }
 

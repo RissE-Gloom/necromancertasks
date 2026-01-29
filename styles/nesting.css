@@ -2,61 +2,69 @@
 
 /* Контейнер для подзадач внутри основной карточки */
 .subtasks-container {
-    margin-left: 1.25rem;
+    margin-left: 1rem;
     margin-top: 0.75rem;
     padding-left: 0.75rem;
-    border-left: 2px solid #e2e8f0;
+    border-left: 2px solid rgba(255, 255, 255, 0.15);
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
-/* Стили вложенной карточки */
+/* Стили вложенной карточки - просто немного меньше и с отступом */
 .task-card.subtask {
     padding: 0.75rem;
-    font-size: 0.9em;
-    box-shadow: none;
-    background-color: #f8fafc;
-    border-style: dashed;
+    font-size: 0.95em;
+    margin-left: 0;
 }
 
-/* Кнопка развертывания/свертывания */
+/* Кнопка развертывания */
 .expand-toggle {
     background: none;
     border: none;
     cursor: pointer;
     padding: 4px;
-    margin-right: 4px;
+    margin-right: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     transition: transform 0.2s ease;
-    color: #64748b;
-    border-radius: 4px;
+    color: inherit;
+    opacity: 0.7;
 }
 
 .expand-toggle:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    opacity: 1;
 }
 
 .expand-toggle.expanded {
     transform: rotate(90deg);
 }
 
-.expand-toggle i, .expand-toggle svg {
-    width: 14px;
-    height: 14px;
+/* Зона вложения при перетаскивании - НИКАКИХ рамок и фонов */
+.nest-zone-active {
+    /* Полностью убираем визуальную индикацию */
+    outline: none !important;
+    background-color: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
-/* Визуальная индикация зоны вложения при перетаскивании */
-.drop-target-nest {
-    outline: 2px dashed #3b82f6 !important;
-    outline-offset: -2px;
-    background-color: rgba(59, 130, 246, 0.08) !important;
-    transform: scale(1.02);
+/* Убираем все старые стили */
+.drop-target-nest,
+.drop-target-nest::after,
+.drop-target-nest::before {
+    content: none !important;
+    display: none !important;
+    background: transparent !important;
+    outline: none !important;
 }
 
-/* Специфичное поведение для карточек с детьми */
-.task-card.has-children {
-    border-bottom: 2px solid #3b82f633;
+/* Убираем любые псевдоэлементы с текстом */
+.task-card::after,
+.task-card::before,
+.nest-zone-active::after,
+.nest-zone-active::before {
+    content: none !important;
+    display: none !important;
 }
