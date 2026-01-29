@@ -1069,6 +1069,7 @@ class KanbanBoard {
 
         // Разворачиваем родителя, чтобы показать вложение
         this.expandedTasks.add(parentId);
+        this.saveExpandedTasks();
       } else {
         const newStatus = columnContent.dataset.status
         this.updateTaskStatus(this.draggedTask, newStatus, null) // Explicitly null parentId for root tasks
