@@ -68,6 +68,7 @@ class KanbanBoard {
     this.setupColumnClickHandlers();
     this.checkAndRemoveOldTasks();
     this.render();
+    this.updateLabelSelects();
     this.lucide.createIcons();
 
     // Интервал для проверки старых задач
