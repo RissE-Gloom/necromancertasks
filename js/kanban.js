@@ -23,6 +23,9 @@ class KanbanBoard {
     this.maxRetries = 5;
     this.expandedTasks = new Set(); // Храним ID развернутых подзадач
 
+    // Сразу наполняем списки меток стандартными значениями
+    this.updateLabelSelects();
+
     // this.init()
   }
 
@@ -630,6 +633,7 @@ class KanbanBoard {
 
   // Modal Management
   openAddTaskModal(preselectedStatus = null) {
+    this.updateLabelSelects()
     this.populateStatusOptions(preselectedStatus)
     this.populateParentOptions("task-parentId")
     this.openModal("add-task-modal")
@@ -729,6 +733,7 @@ class KanbanBoard {
     const parentSelect = document.getElementById("edit-task-parentId");
     if (parentSelect) parentSelect.value = task.parentId || "";
 
+    this.updateLabelSelects()
     this.populateEditStatusOptions()
     this.populateParentOptions("edit-task-parentId", taskId)
     this.openModal("edit-task-modal")
