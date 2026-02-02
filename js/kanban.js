@@ -725,15 +725,17 @@ class KanbanBoard {
     document.getElementById("edit-task-priority").value = task.priority
     document.getElementById("edit-task-status").value = task.status
 
-    // Устанавливаем текущую метку в селекте
+    // Сначала наполняем список меток опциями, а потом выбираем текущую
+    this.updateLabelSelects();
     const labelSelect = document.getElementById("edit-task-label");
-    if (labelSelect) labelSelect.value = task.label || "";
+    if (labelSelect) {
+      labelSelect.value = task.label || "";
+    }
 
     // Устанавливаем текущего родителя в селекте (если это не подзадача)
     const parentSelect = document.getElementById("edit-task-parentId");
     if (parentSelect) parentSelect.value = task.parentId || "";
 
-    this.updateLabelSelects()
     this.populateEditStatusOptions()
     this.populateParentOptions("edit-task-parentId", taskId)
     this.openModal("edit-task-modal")
