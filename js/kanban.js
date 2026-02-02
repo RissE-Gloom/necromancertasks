@@ -708,7 +708,11 @@ class KanbanBoard {
     document.getElementById("edit-task-priority").value = task.priority
     document.getElementById("edit-task-status").value = task.status
 
-    // Устанавливаем текущего родителя в селекте
+    // Устанавливаем текущую метку в селекте
+    const labelSelect = document.getElementById("edit-task-label");
+    if (labelSelect) labelSelect.value = task.label || "";
+
+    // Устанавливаем текущего родителя в селекте (если это не подзадача)
     const parentSelect = document.getElementById("edit-task-parentId");
     if (parentSelect) parentSelect.value = task.parentId || "";
 
@@ -737,6 +741,7 @@ class KanbanBoard {
       description: formData.get("description"),
       priority: formData.get("priority"),
       status: formData.get("status"),
+      label: formData.get("label") || "",
       parentId: formData.get("parentId") || null
     }
 
