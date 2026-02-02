@@ -270,8 +270,14 @@ class KanbanBoard {
 
   // Label Management
   loadLabels() {
-    const saved = localStorage.getItem("kanban-labels");
-    return saved ? JSON.parse(saved) : ["Баг", "Фича", "Проект X"];
+    try {
+      const saved = localStorage.getItem("kanban-labels");
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) ? parsed : ["Баг", "Фича", "Проект X"];
+    } catch (e) {
+      console.error("Error loading labels:", e);
+      return ["Баг", "Фича", "Проект X"];
+    }
   }
 
   saveLabels() {
@@ -306,11 +312,17 @@ class KanbanBoard {
 
   updateLabelSelects() {
     const selects = [document.getElementById("task-label"), document.getElementById("edit-task-label")];
+    const labelArray = Array.isArray(this.labels) ? this.labels : [];
+
     selects.forEach(select => {
       if (!select) return;
       const currentValue = select.value;
-      select.innerHTML = '<option value="">Без метки</option>' +
-        this.labels.map(l => `<option value="${l}">${l}</option>`).join("");
+
+      // Сначала устанавливаем "Без метки", затем добавляем остальные
+      let optionsHtml = '<option value="">Без метки</option>';
+      optionsHtml += labelArray.map(l => `<option value="${l}">${l}</option>`).join("");
+
+      select.innerHTML = optionsHtml;
       select.value = currentValue;
     });
   }
