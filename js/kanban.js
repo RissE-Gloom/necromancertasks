@@ -21,6 +21,7 @@ class KanbanBoard {
     // this.setupWebSocket();
     this.retryCount = 0;
     this.maxRetries = 5;
+    this.expandedTasks = new Set(); // Храним ID развернутых подзадач
 
     // this.init()
   }
@@ -819,18 +820,48 @@ class KanbanBoard {
                 </div>
             </div>
             <div class="column-content" data-status="${column.status}">
-                ${tasks.map((task) => this.createTaskElement(task)).join("")}
+                ${this.renderTasksForColumn(column.status)}
             </div>
         `
 
     return columnDiv
   }
 
-  createTaskElement(task) {
+  // Новый метод для рендеринга задач с учетом вложенности и свертывания
+  renderTasksForColumn(status) {
+    const rootTasks = this.tasks.filter(t => t.status === status && !t.parentId);
+    const childTasks = this.tasks.filter(t => t.parentId);
+
+    return rootTasks.map(task => {
+      const children = childTasks.filter(c => c.parentId == task.id);
+      const isExpanded = this.expandedTasks.has(task.id);
+      const visibleChildren = isExpanded ? children : children.slice(0, 2);
+
+      const taskHtml = this.createTaskElement(task, false);
+
+      // Если есть подзадачи, вставляем их в контейнер внутри карточки
+      if (children.length > 0) {
+        const subtasksHtml = visibleChildren.map(c => this.createTaskElement(c, true)).join('');
+        const toggleBtnHtml = children.length > 2
+          ? `<button class="toggle-subtasks-btn" data-task-id="${task.id}">
+               ${isExpanded ? 'Скрыть подзадачи' : `Показать еще (${children.length - 2})`}
+             </button>`
+          : '';
+
+        return taskHtml.replace('<div class="subtasks-container"></div>',
+          `<div class="subtasks-container">${subtasksHtml}</div>${toggleBtnHtml}`);
+      }
+
+      return taskHtml;
+    }).join("");
+  }
+
+  createTaskElement(task, isSubtask = false) {
     const priorityClass = `priority-${task.priority}`;
+    const subtaskClass = isSubtask ? 'subtask' : '';
 
     return `
-            <div class="task-card ${priorityClass}" data-task-id="${task.id}" draggable="true">
+            <div class="task-card ${priorityClass} ${subtaskClass}" data-task-id="${task.id}" draggable="true">
                 <div class="task-header">
                     <h4 class="task-title">${task.title}</h4>
                     <div class="task-actions">
@@ -866,6 +897,7 @@ class KanbanBoard {
                     <span class="task-priority priority-${task.priority}">${task.priority}</span>
                     ${task.label ? `<span class="task-label">${task.label}</span>` : ''} 
                 </div>
+                ${!isSubtask ? '<div class="subtasks-container"></div>' : ''}
             </div>
         `
   }
@@ -885,6 +917,20 @@ class KanbanBoard {
       btn.addEventListener('click', (e) => {
         const status = e.target.closest('.delete-column-btn').dataset.status;
         this.deleteColumn(status);
+      });
+    });
+
+    // Обработчики для кнопок раскрытия подзадач
+    document.querySelectorAll('.toggle-subtasks-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const taskId = btn.dataset.taskId;
+        if (this.expandedTasks.has(taskId)) {
+          this.expandedTasks.delete(taskId);
+        } else {
+          this.expandedTasks.add(taskId);
+        }
+        this.render();
       });
     });
   }
@@ -936,16 +982,41 @@ class KanbanBoard {
     e.dataTransfer.dropEffect = "move"
 
     const columnContent = e.target.closest(".column-content")
+    const targetCard = e.target.closest(".task-card")
 
-    if (columnContent && this.draggedTask) {
+    // Очищаем старые пометки цели вложения
+    document.querySelectorAll('.nest-target').forEach(el => el.classList.remove('nest-target'))
+
+    if (this.draggedTask) {
       const draggingElement = document.querySelector(".dragging")
 
-      const afterElement = this.getDragAfterElement(columnContent, e.clientY)
+      // Логика вложения (экспериментальная механика)
+      if (targetCard && targetCard !== draggingElement) {
+        // Определяем корневую карточку
+        const rootCard = targetCard.classList.contains('subtask')
+          ? targetCard.closest('.column-content > .task-card')
+          : targetCard;
 
-      if (afterElement == null) {
-        columnContent.appendChild(draggingElement)
-      } else {
-        columnContent.insertBefore(draggingElement, afterElement)
+        if (rootCard && rootCard !== draggingElement) {
+          const rect = rootCard.getBoundingClientRect();
+          const relativeY = e.clientY - rect.top;
+
+          // Зона вложения: если не на самых краях (15px)
+          if (relativeY > 15 && relativeY < rect.height - 15) {
+            rootCard.classList.add('nest-target');
+            return;
+          }
+        }
+      }
+
+      // Логика смены порядка
+      if (columnContent) {
+        const afterElement = this.getDragAfterElement(columnContent, e.clientY)
+        if (afterElement == null) {
+          columnContent.appendChild(draggingElement)
+        } else {
+          columnContent.insertBefore(draggingElement, afterElement)
+        }
       }
     }
   }
@@ -966,11 +1037,35 @@ class KanbanBoard {
 
   handleDrop(e) {
     const columnContent = e.target.closest(".column-content")
+    const nestTarget = document.querySelector('.nest-target')
 
-    if (columnContent && this.draggedTask) {
-      const newStatus = columnContent.dataset.status
-      this.updateTaskStatus(this.draggedTask, newStatus)
-      columnContent.classList.remove("drag-over")
+    if (this.draggedTask) {
+      const taskIndex = this.tasks.findIndex(t => t.id === this.draggedTask);
+      if (taskIndex === -1) return;
+
+      if (nestTarget) {
+        const parentId = nestTarget.dataset.taskId;
+        const hasChildren = this.tasks.some(c => c.parentId == this.draggedTask);
+
+        if (!hasChildren) {
+          this.tasks[taskIndex].parentId = parentId;
+          this.tasks[taskIndex].status = this.tasks.find(t => t.id === parentId).status;
+        } else {
+          alert('Эту карточку нельзя вложить, так как у неё есть свои подзадачи');
+          this.tasks[taskIndex].parentId = null;
+        }
+      } else if (columnContent) {
+        const newStatus = columnContent.dataset.status
+        this.tasks[taskIndex].status = newStatus;
+        this.tasks[taskIndex].parentId = null; // При перемещении в корень сбрасываем родителя
+        this.trackTaskMovement(this.draggedTask, null, newStatus);
+      }
+
+      document.querySelectorAll('.nest-target').forEach(el => el.classList.remove('nest-target'))
+      if (columnContent) columnContent.classList.remove("drag-over")
+
+      this.saveTasks();
+      this.render();
     }
   }
 
