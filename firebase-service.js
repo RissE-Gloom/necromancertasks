@@ -2,36 +2,45 @@
 class FirebaseService {
     constructor() {
         this.isInitialized = false;
-        this.isSyncing = false; 
+        this.isSyncing = false;
         this.firebaseConfig = {
             apiKey: "AIzaSyAqnTZXQDuCF3QqxhOhwTRXCulDaLO_iUI",
             authDomain: "berloga-lisy.firebaseapp.com",
-            databaseURL: "https://berloga-lisy-default-rtdb.europe-west1.firebasedatabase.app", 
+            databaseURL: "https://berloga-lisy-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "berloga-lisy",
             storageBucket: "berloga-lisy.firebasestorage.app",
             messagingSenderId: "266173768415",
             appId: "1:266173768415:web:46e245024336974a7c3f6a"
-        }; 
-        this.init();
+        };
+
+        // Создаем промис для отслеживания инициализации
+        this.initializationPromise = this.init();
     }
 
     async init() {
         try {
             await this.loadFirebaseSDK();
-            
+
             // Проверяем, загружен ли Firebase
             if (typeof firebase === 'undefined') {
                 console.error('Firebase not loaded');
                 return;
             }
-            
-            this.app = firebase.initializeApp(this.firebaseConfig); 
+
+            this.app = firebase.initializeApp(this.firebaseConfig);
             this.db = firebase.database();
             this.isInitialized = true;
             console.log('✅ Firebase initialized');
         } catch (error) {
             console.error('❌ Firebase initialization failed:', error);
+            this.isInitialized = false; // Явно указываем
         }
+    }
+
+    // Helper to wait for init
+    async waitForInitialization() {
+        await this.initializationPromise;
+        return this.isInitialized;
     }
 
     setupGlobalHandlers() {
@@ -82,7 +91,7 @@ class FirebaseService {
             tasks.forEach(task => {
                 tasksObj[task.id] = task;
             });
-            
+
             await this.db.ref(`projects/default/tasks`).set(tasksObj);
             await this.updateTimestamp();
             return true;
@@ -123,7 +132,7 @@ class FirebaseService {
             columns.forEach(column => {
                 columnsObj[column.id] = column;
             });
-            
+
             await this.db.ref(`projects/default/columns`).set(columnsObj);
             await this.updateTimestamp();
             return true;
@@ -153,9 +162,40 @@ class FirebaseService {
         });
     }
 
+    async saveLabels(labels) {
+        if (!this.isInitialized) return false;
+        try {
+            await this.db.ref(`projects/default/labels`).set(labels);
+            await this.updateTimestamp();
+            return true;
+        } catch (error) {
+            console.error('Error saving labels:', error);
+            return false;
+        }
+    }
+
+    async loadLabels() {
+        return new Promise((resolve) => {
+            if (!this.isInitialized) {
+                resolve([]);
+                return;
+            }
+
+            this.db.ref('projects/default/labels').once('value')
+                .then(snapshot => {
+                    const data = snapshot.val();
+                    resolve(Array.isArray(data) ? data : []);
+                })
+                .catch(error => {
+                    console.error('Error loading labels:', error);
+                    resolve([]);
+                });
+        });
+    }
+
     async updateTimestamp() {
         if (!this.isInitialized) return;
-        
+
         try {
             await this.db.ref('projects/default/lastUpdated').set(new Date().toISOString());
         } catch (error) {
@@ -165,20 +205,21 @@ class FirebaseService {
 
     async manualSync() {
         if (!this.isInitialized) return;
-        
+
         console.log('🔄 Manual sync started');
         this.isSyncing = true;
-        
+
         try {
             // Загружаем свежие данные из Firebase
-            const [tasks, columns] = await Promise.all([
+            const [tasks, columns, labels] = await Promise.all([
                 this.loadTasks(),
-                this.loadColumns()
+                this.loadColumns(),
+                this.loadLabels()
             ]);
-            
+
             console.log('✅ Manual sync completed');
-            return { tasks, columns };
-            
+            return { tasks, columns, labels };
+
         } catch (error) {
             console.error('❌ Manual sync failed:', error);
             return null;
@@ -186,7 +227,7 @@ class FirebaseService {
             this.isSyncing = false;
         }
     }
-    
+
     // Реaltime синхронизация
     setupRealtimeSync(onDataChange) {
         if (!this.isInitialized) return;
@@ -195,17 +236,17 @@ class FirebaseService {
         this.isSyncing = false;
 
         this.db.ref('projects/default').on('value', (snapshot) => {
-             // Игнорируем синхронизацию если это ответ на наш же запрос
-        if (this.isSyncing) {
-            this.isSyncing = false;
-            return;
-        }
-        
-        const data = snapshot.val();
-        if (data && onDataChange) {
-            console.log('🔄 Firebase realtime update received');
-            onDataChange(data.tasks || {}, data.columns || {});
-        }
+            // Игнорируем синхронизацию если это ответ на наш же запрос
+            if (this.isSyncing) {
+                this.isSyncing = false;
+                return;
+            }
+
+            const data = snapshot.val();
+            if (data && onDataChange) {
+                console.log('🔄 Firebase realtime update received');
+                onDataChange(data.tasks || {}, data.columns || {}, data.labels || []);
+            }
         });
     }
 }

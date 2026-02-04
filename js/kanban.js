@@ -31,8 +31,9 @@ class KanbanBoard {
 
   async initFirebase() {
     try {
-      // Ждем инициализации Firebase
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Ждем инициализации Firebase через правильный промис
+      console.log('⏳ Waiting for Firebase initialization...');
+      await this.firebase.waitForInitialization();
 
       if (this.firebase.isInitialized) {
         console.log('🔄 Starting Firebase sync...');
@@ -40,18 +41,29 @@ class KanbanBoard {
         // Используем manualSync для первоначальной загрузки
         const syncResult = await this.firebase.manualSync();
         if (syncResult) {
-          this.tasks = syncResult.tasks;
-          this.columns = syncResult.columns;
+          this.tasks = syncResult.tasks || [];
+          this.columns = syncResult.columns || [];
+
+          if (syncResult.labels && syncResult.labels.length > 0) {
+            this.labels = syncResult.labels;
+          } else if (this.labels && this.labels.length > 0) {
+            // Если в Firebase пусто, но локально есть - пушим в облако
+            console.log('📤 Pushing local labels to Firebase...');
+            this.firebase.saveLabels(this.labels);
+          }
+
           this.isOnline = true;
           console.log('✅ Firebase data loaded');
         }
 
         // Настраиваем реальное время синхронизацию
-        this.firebase.setupRealtimeSync((tasks, columns) => {
+        this.firebase.setupRealtimeSync((tasks, columns, labels) => {
           console.log('🔄 Real-time update from Firebase');
-          this.tasks = Object.values(tasks || {});
-          this.columns = Object.values(columns || {});
+          if (tasks) this.tasks = Object.values(tasks);
+          if (columns) this.columns = Object.values(columns);
+          if (labels) this.labels = labels;
           this.render();
+          this.updateLabelSelects();
         });
 
       } else {
@@ -148,7 +160,7 @@ class KanbanBoard {
 
       switch (message.type) {
         case 'REQUEST_STATUS':
-          this.sendStatus(message.chatId);
+          this.sendStatus(message.chatId, message.reason);
           break;
 
         case 'REQUEST_COLUMN_STATUS':
@@ -200,7 +212,7 @@ class KanbanBoard {
     }
   }
 
-  sendStatus(chatId = null) {
+  sendStatus(chatId = null, reason = null) {
     try {
       const status = {
         type: 'STATUS_RESPONSE',
@@ -214,6 +226,8 @@ class KanbanBoard {
             taskCount: tasks.length
           };
         }),
+        labels: this.labels,
+        reason: chatId ? reason : null,
         timestamp: new Date().toISOString()
       };
 
@@ -285,6 +299,9 @@ class KanbanBoard {
 
   saveLabels() {
     localStorage.setItem("kanban-labels", JSON.stringify(this.labels));
+    if (this.firebase && this.firebase.isInitialized) {
+      this.firebase.saveLabels(this.labels);
+    }
     this.updateLabelSelects();
   }
 
