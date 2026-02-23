@@ -22,6 +22,8 @@ class KanbanBoard {
     this.retryCount = 0;
     this.maxRetries = 5;
     this.expandedTasks = new Set(); // Храним ID развернутых подзадач
+    this._autoScrollRAF = null;    // requestAnimationFrame ID для авто-скролла
+    this._autoScrollSpeed = 0;     // Скорость авто-скролла (px/frame)
 
     // Сразу наполняем списки меток стандартными значениями
     this.updateLabelSelects();
@@ -1029,6 +1031,9 @@ class KanbanBoard {
     // Очищаем старые пометки цели вложения
     document.querySelectorAll('.nest-target').forEach(el => el.classList.remove('nest-target'))
 
+    // --- Авто-скролл при приближении к краям экрана ---
+    this._startAutoScroll(e.clientX);
+
     if (this.draggedTask) {
       const draggingElement = document.querySelector(".dragging")
 
@@ -1060,6 +1065,40 @@ class KanbanBoard {
           columnContent.insertBefore(draggingElement, afterElement)
         }
       }
+    }
+  }
+
+  _startAutoScroll(clientX) {
+    const EDGE_ZONE = 150;  // px от края — зона активации
+    const MAX_SPEED = 15;   // максимальная скорость, px/frame
+    const viewportWidth = window.innerWidth;
+
+    if (clientX < EDGE_ZONE) {
+      // Левый край: скролл влево, скорость растёт по мере приближения
+      this._autoScrollSpeed = -Math.round(MAX_SPEED * (1 - clientX / EDGE_ZONE));
+    } else if (clientX > viewportWidth - EDGE_ZONE) {
+      // Правый край: скролл вправо
+      this._autoScrollSpeed = Math.round(MAX_SPEED * (1 - (viewportWidth - clientX) / EDGE_ZONE));
+    } else {
+      this._autoScrollSpeed = 0;
+    }
+
+    // Запускаем цикл только если ещё не запущен и есть скорость
+    if (this._autoScrollSpeed !== 0 && !this._autoScrollRAF) {
+      const container = document.querySelector('.kanban-container');
+      const scroll = () => {
+        if (this._autoScrollSpeed !== 0 && container) {
+          container.scrollBy({ left: this._autoScrollSpeed, behavior: 'instant' });
+          this._autoScrollRAF = requestAnimationFrame(scroll);
+        } else {
+          this._autoScrollRAF = null;
+        }
+      };
+      this._autoScrollRAF = requestAnimationFrame(scroll);
+    } else if (this._autoScrollSpeed === 0) {
+      // Скорость обнулилась — останавливаем без ожидания следующего кадра
+      cancelAnimationFrame(this._autoScrollRAF);
+      this._autoScrollRAF = null;
     }
   }
 
@@ -1115,6 +1154,11 @@ class KanbanBoard {
     if (e.target.classList.contains("task-card")) {
       e.target.classList.remove("dragging")
     }
+
+    // Останавливаем авто-скролл
+    this._autoScrollSpeed = 0;
+    cancelAnimationFrame(this._autoScrollRAF);
+    this._autoScrollRAF = null;
 
     // Clean up drag over states
     document.querySelectorAll(".column-content").forEach((column) => {
