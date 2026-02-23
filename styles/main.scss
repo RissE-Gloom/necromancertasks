@@ -392,6 +392,10 @@ body {
   }
 }
 
+.task-card:has(.dropdown.open):hover {
+    transform: none;
+}
+
 .dropdown-menu {
   position: absolute;
   top: 100%;
